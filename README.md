@@ -15,9 +15,11 @@ chmod +x scripts/dev.sh
 ./scripts/dev.sh
 ```
 
-- API: http://localhost:5080 (`/health`, `/api/...`)
-- SPA: http://localhost:5173 (Vite proxies `/api` to the API)
+- API: http://localhost:5080 (`/health`, `/api/...`, OpenAPI `/swagger`)
+- SPA: http://localhost:5173 — `client/` (Vite proxies `/api` + `/swagger`)
 - SQLite file: `src/api/data/admin.db` (created + seeded on first start)
+
+Lane split: this branch owns the **API** (vault/RBAC/audit/auth/seed) and the **Admin chrome + login**. Home / Clients / Flags screens are stubs in `client/src/screens/` for Dev2. Types live in `client/src/contracts.ts`.
 
 ### Seed logins (exact AC)
 
@@ -89,10 +91,12 @@ After Azure deploy: put `AUTH_SECRET` and a 32-byte `VAULT_DEK` in Key Vault, wi
 
 ```
 src/api     ASP.NET Core Web API + EF Core
-src/web     React + Vite SPA
+client      React + Vite SPA (login + Admin chrome; Home/Clients/Flags are Dev2 stubs)
 infra/      Bicep (RG, SQL, storage/files, KV, App Services, Insights)
 scripts/    local + Azure deploy
 tests/      QA smoke (Brandon/Maya/vault/export/token)
 ```
 
-`dotnet test` and `npm run build` (in `src/web`) are the CI gates.
+`dotnet test` and `npm run build` (in `client`) are the CI gates.
+
+OpenAPI: http://localhost:5080/swagger · Dev2 contracts: `client/src/contracts.ts` + `client/README.md`.

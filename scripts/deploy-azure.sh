@@ -34,10 +34,10 @@ az deployment group create \
 echo "Build API + SPA"
 export PATH="$HOME/.dotnet:$PATH"
 dotnet publish "$ROOT/src/api/Bis.Admin.Api.csproj" -c Release -o "$ROOT/artifacts/api"
-(cd "$ROOT/src/web" && npm ci && npm run build)
+(cd "$ROOT/client" && npm ci && npm run build)
 rm -rf "$ROOT/artifacts/api/wwwroot"
 mkdir -p "$ROOT/artifacts/api/wwwroot"
-cp -R "$ROOT/src/web/dist/." "$ROOT/artifacts/api/wwwroot/"
+cp -R "$ROOT/client/dist/." "$ROOT/artifacts/api/wwwroot/"
 
 echo "Zip + deploy API"
 (cd "$ROOT/artifacts/api" && zip -qr ../api.zip .)

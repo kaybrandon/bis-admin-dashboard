@@ -8,7 +8,8 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:5080",
       "/health": "http://localhost:5080",
-      "/files": "http://localhost:5080"
+      "/files": "http://localhost:5080",
+      "/swagger": "http://localhost:5080"
     }
   },
   build: { outDir: "dist", emptyOutDir: true }

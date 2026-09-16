@@ -14,6 +14,7 @@ data/
 .env.local
 src/api/wwwroot/
 src/web/dist/
+client/dist/
 *.log
 .DS_Store
 TestResults/

@@ -102,6 +102,22 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task OpenApi_documents_home_clients_flags()
+    {
+        var client = _factory.CreateClient();
+        var res = await client.GetAsync("/swagger/v1/swagger.json");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var json = await res.Content.ReadAsStringAsync();
+        Assert.Contains("BIS Admin API", json);
+        Assert.Contains("/api/home", json);
+        Assert.Contains("/api/clients", json);
+        Assert.Contains("/api/flags", json);
+        Assert.Contains("HomeBoardDto", json);
+        Assert.Contains("ClientFileDto", json);
+        Assert.Contains("FlagRowDto", json);
+    }
+
+    [Fact]
     public async Task Sso_is_off()
     {
         var client = _factory.CreateClient();

@@ -17,5 +17,5 @@ jobs:
       - name: Test API
         run: dotnet test --nologo
       - name: Build SPA
-        working-directory: src/web
+        working-directory: client
         run: npm ci && npm run build

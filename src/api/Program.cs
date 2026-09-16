@@ -6,6 +6,7 @@ using Bis.Admin.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +35,29 @@ builder.Services.AddScoped<MentionService>();
 builder.Services.AddScoped<FileStore>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddApplicationInsightsTelemetry();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "BIS Admin API",
+        Version = "v1",
+        Description = "Staff Admin (never Folio). Home / Clients / Flags contracts for the Vite SPA in client/."
+    });
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT from POST /api/auth/login, or adm_ext_ access token",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }] = Array.Empty<string>()
+    });
+});
 
 var spaOrigin = builder.Configuration["APP_BASE_URL"] ?? "http://localhost:5173";
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
@@ -42,6 +66,12 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 
 var app = builder.Build();
 
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "BIS Admin API v1");
+    c.DocumentTitle = "Admin API";
+});
 app.UseCors();
 app.Use(async (ctx, next) =>
 {

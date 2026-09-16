@@ -33,7 +33,7 @@ Generated: 2026-09-16
 | Component | Type | Technology | Path |
 |-----------|------|------------|------|
 | Admin API | API | ASP.NET Core 8 / EF Core | `src/api` |
-| Admin SPA | Frontend | React + Vite + TypeScript | `src/web` |
+| Admin SPA | Frontend | React + Vite + TypeScript | `client/` |
 | Azure SQL | Data | SQL Server (local: SQLite) | `infra` + connection string |
 | Blob files | Storage | Azure Blob container `files` (local: disk) | `infra` + `BLOB_CONTAINER` |
 | Secrets | Security | Key Vault Standard | `infra` |
@@ -110,11 +110,11 @@ Azure CLI and subscription credentials are **not available** in this agent envir
 - [x] **User approved this plan** (build-tonight brief)
 
 ### Phase 2: Execution
-- [x] Generate `src/api` + `src/web`
+- [x] Generate `src/api` + `client/` SPA shell
 - [x] Generate `infra/` Bicep + `scripts/deploy-azure.sh`
-- [ ] Local SQLite migrate + seed
-- [ ] Functional verification (API smoke + SPA)
-- [ ] Update plan status to Ready for Validation (IaC only; live Azure validate blocked without creds)
+- [x] Local SQLite migrate + seed
+- [x] Functional verification (API smoke + SPA browser QA)
+- [x] Plan ready for validation (live Azure validate blocked — no `az` credentials)
 
 ### Phase 3: Validation
 - [ ] Local build/test/seed
@@ -140,12 +140,11 @@ Azure CLI and subscription credentials are **not available** in this agent envir
 | File | Purpose | Status |
 |------|---------|--------|
 | `.azure/deployment-plan.md` | This plan | ✅ |
-| `infra/main.bicep` | RG resources | ⏳ |
-| `infra/main.json` | Compiled optional | ⏳ |
-| `scripts/deploy-azure.sh` | `az group create` + deploy | ⏳ |
-| `scripts/dev.sh` | Local API + SPA + seed | ⏳ |
-| `src/api/*` | Web API | ⏳ |
-| `src/web/*` | Vite SPA | ⏳ |
+| `infra/main.bicep` | RG resources | ✅ |
+| `scripts/deploy-azure.sh` | `az group create` + deploy | ✅ |
+| `scripts/dev.sh` | Local API + SPA + seed | ✅ |
+| `src/api/*` | Web API + OpenAPI | ✅ |
+| `client/*` | Vite SPA shell (Home/Clients/Flags stubs for Dev2) | ✅ |
 
 ---
 

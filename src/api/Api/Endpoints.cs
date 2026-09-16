@@ -174,7 +174,7 @@ public static class Endpoints
                 kudosTop = top,
                 birthdays = inWindow
             });
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Home").Produces<HomeBoardDto>();
     }
 
     private static void MapClients(RouteGroupBuilder api)
@@ -209,7 +209,7 @@ public static class Endpoints
                     c.BusinessPhone, c.BusinessEmail, c.Website
                 };
             }));
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Clients").Produces<IEnumerable<ClientListRowDto>>();
 
         api.MapPost("/clients", async (HttpContext ctx, ClientCreateRequest req, AppDbContext db, AuditWriter audit) =>
         {
@@ -233,7 +233,7 @@ public static class Endpoints
             await db.SaveChangesAsync();
             await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "client", c.Id, c.Id, null, new { c.Name }, null);
             return Results.Ok(new { c.Id });
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
 
         api.MapGet("/clients/{id:guid}", async (HttpContext ctx, Guid id, AppDbContext db) =>
         {
@@ -243,7 +243,7 @@ public static class Endpoints
             var c = await LoadClient(db, id);
             if (c is null) return Results.NotFound();
             return Results.Ok(ClientFile(c, includeVaultMasked: true, includeCareFlags: true));
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Clients").Produces<ClientFileDto>();
 
         api.MapGet("/clients/{id:guid}/print", async (HttpContext ctx, Guid id, AppDbContext db) =>
         {
@@ -253,7 +253,7 @@ public static class Endpoints
             if (c is null) return Results.NotFound();
             var dto = ClientFile(c, includeVaultMasked: false, includeCareFlags: false, print: true);
             return Results.Ok(dto);
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Clients").Produces<ClientFileDto>();
 
         api.MapPost("/clients/{id:guid}/people", async (HttpContext ctx, Guid id, PersonWriteRequest req, AppDbContext db, AuditWriter audit) =>
         {
@@ -312,7 +312,7 @@ public static class Endpoints
             if (deny is not null) return deny;
             var items = await db.Credentials.Where(c => c.ClientId == id).ToListAsync();
             return Results.Ok(items.Select(Maps.VaultMasked));
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Clients").Produces<IEnumerable<VaultMaskedDto>>();
 
         api.MapPost("/clients/{id:guid}/vault", async (HttpContext ctx, Guid id, VaultWriteRequest req, AppDbContext db, VaultCrypto vault, AuditWriter audit) =>
         {
@@ -329,7 +329,7 @@ public static class Endpoints
             await db.SaveChangesAsync();
             await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "credential", cred.Id, id, null, new { cred.Title, cred.Username, cred.Department }, null);
             return Results.Ok(Maps.VaultMasked(cred));
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Clients").Produces<VaultMaskedDto>();
 
         api.MapPost("/clients/{id:guid}/vault/{credId:guid}/reveal", async (HttpContext ctx, Guid id, Guid credId, AppDbContext db, VaultCrypto vault, AuditWriter audit) =>
         {
@@ -341,7 +341,7 @@ public static class Endpoints
             var secret = vault.Decrypt(cred.SecretIv, cred.SecretCipher);
             await audit.WriteAsync(Authz.Actor(ctx).Id, "reveal", "credential", cred.Id, id, null, new { cred.Title, revealed = true }, null);
             return Results.Ok(new { secret });
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Clients");
     }
 
     private static void MapFlags(RouteGroupBuilder api)
@@ -366,7 +366,7 @@ public static class Endpoints
                 clientId = f.ClientId, client = f.Client?.Name,
                 createdById = f.CreatedById, createdBy = f.CreatedBy?.Name
             }));
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Flags").Produces<IEnumerable<FlagRowDto>>();
 
         api.MapPost("/flags", async (HttpContext ctx, FlagCreateRequest req, AppDbContext db, AuditWriter audit, MentionService mentions) =>
         {
@@ -382,7 +382,7 @@ public static class Endpoints
             await mentions.CaptureAsync(db, req.Body, "flag", f.Id, f.CreatedById, default);
             await audit.WriteAsync(f.CreatedById, "create", "flag", f.Id, f.ClientId, null, new { f.Body, f.LevelId }, null);
             return Results.Ok(new { f.Id });
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Flags").Produces<CreatedIdDto>();
 
         api.MapPost("/flags/{id:guid}/archive", async (HttpContext ctx, Guid id, AppDbContext db, AuditWriter audit) =>
         {
@@ -395,7 +395,7 @@ public static class Endpoints
             await db.SaveChangesAsync();
             await audit.WriteAsync(Authz.Actor(ctx).Id, "archive", "flag", f.Id, f.ClientId, null, new { f.PurgeAt }, null);
             return Results.Ok(new { f.Id, f.PurgeAt });
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Flags");
 
         api.MapPost("/flags/{id:guid}/restore", async (HttpContext ctx, Guid id, AppDbContext db, AuditWriter audit) =>
         {
@@ -410,7 +410,7 @@ public static class Endpoints
             await db.SaveChangesAsync();
             await audit.WriteAsync(Authz.Actor(ctx).Id, "restore", "flag", f.Id, f.ClientId, null, new { restored = true }, null);
             return Results.Ok(new { f.Id });
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Flags").Produces<CreatedIdDto>();
     }
 
     private static void MapTeam(RouteGroupBuilder api)

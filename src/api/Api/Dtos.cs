@@ -22,6 +22,29 @@ public record TokenCreateRequest(string Name, string? Contact, bool Internal);
 public record RevertRequest(string? Reason);
 public record SettingWriteRequest(string? CompanyName, bool? ShowPresence, int? IdleMinutes, bool? GeofenceOffice);
 
+public record HomeStatsDto(int Wins, int OnRoad, int InOffice, int OpenFlags);
+public record HomeCommentDto(Guid Id, string Body, string? Author, DateTime CreatedAt);
+public record HomePostDto(Guid Id, string Kind, string Title, string Body, DateTime CreatedAt, DateOnly WeekStart, string? Author, IEnumerable<HomeCommentDto> Comments);
+public record HomeStarDto(string? To, string Body, Guid From);
+public record HomeMentionBarDto(Guid UserId, string Name, int Count);
+public record HomeKudosTopDto(Guid UserId, string? Name, string Initials, string? AvatarColor, int Stars);
+public record HomeBirthdayDto(Guid Id, string Name, string Initials);
+public record HomeBoardDto(DateOnly WeekStart, DateOnly WeekEnd, string WeekLabel, string Tz, HomeStatsDto Stats, IEnumerable<HomePostDto> Posts, HomeStarDto? StarOfDay, IEnumerable<HomeMentionBarDto> Mentions, IEnumerable<HomeKudosTopDto> KudosTop, IEnumerable<HomeBirthdayDto> Birthdays);
+
+public record ClientListRowDto(Guid Id, string Name, string? Industry, string Status, string? County, string? Primary, string? Address, string? ContractEnd, string? BusinessPhone, string? BusinessEmail, string? Website);
+public record ClientBusinessDto(string? Call, string? Email, string? Map, string? MapLabel, string? Website);
+public record ClientPersonDto(Guid Id, string Name, string? Title, string? Department, string? Email, string? Phone, bool Pinned, bool Primary, string Initials, string? AvatarColor);
+public record ClientAddressDto(Guid Id, string Label, string? Line1, string? City, string? State, string? Zip, string? County, string? Hours, bool IsPrimary, string? Phone, string Maps);
+public record ClientServiceDto(Guid Id, string? Name, bool On, string? Note);
+public record ClientLinkDto(Guid Id, string Label, string Url);
+public record ClientVendorDto(Guid Id, string Kind, string Name, string? Phone);
+public record VaultMaskedDto(Guid Id, string Department, string Title, string? Username, string Secret, string? Url, string? Note);
+public record ClientFlagDto(Guid Id, string Body, DateTime CreatedAt, string? Level, string? Color, string On, string? CreatedBy);
+public record ClientFileDto(Guid Id, string Name, string? Industry, string Status, string? County, string? BusinessPhone, string? BusinessEmail, string? Website, ClientBusinessDto Business, IEnumerable<ClientPersonDto> People, IEnumerable<ClientAddressDto> Addresses, IEnumerable<ClientServiceDto> Services, IEnumerable<ClientLinkDto> Links, IEnumerable<ClientVendorDto> Vendors, IEnumerable<VaultMaskedDto> Vault, IEnumerable<ClientFlagDto> Flags, IEnumerable<object> Files, IEnumerable<object> Notes);
+
+public record FlagRowDto(Guid Id, string Body, DateTime CreatedAt, DateTime? ArchivedAt, DateTime? PurgeAt, int? DaysLeft, string? Level, string? Color, string On, Guid ClientId, string? Client, Guid CreatedById, string? CreatedBy);
+public record CreatedIdDto(Guid Id);
+
 public static class Maps
 {
     public static object UserCard(User u, Punch? open, int kudosWeek, int kudosMonth, int mentionsWeek) => new
