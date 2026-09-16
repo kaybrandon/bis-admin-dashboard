@@ -57,7 +57,7 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
       <div className="h">
         <div>
           <h1>Good {hourWord()}, {firstName(user.name)}</h1>
-          <p>Team board · this week · {board.weekLabel}</p>
+          <p>Team board · this week · {weekRange(board.weekStart, board.weekEnd, board.weekLabel)}</p>
         </div>
         {admin && <button className="btn p admin-only" onClick={() => setPostOn(v => !v)}>+ Post</button>}
       </div>
@@ -193,4 +193,22 @@ function chiShort(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleString("en-US", { timeZone: "America/Chicago", weekday: "short" });
+}
+
+function weekRange(start: string, end: string, fallback: string) {
+  const s = parseDateOnly(start);
+  const e = parseDateOnly(end);
+  if (!s || !e) return fallback;
+  const left = s.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const right = e.getUTCMonth() === s.getUTCMonth()
+    ? String(e.getUTCDate())
+    : e.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return `${left}–${right} · America/Chicago`;
+}
+
+function parseDateOnly(value?: string) {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return null;
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
 }

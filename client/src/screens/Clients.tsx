@@ -16,7 +16,7 @@ export function Clients({ toast, admin }: { toast: ToastFn; admin: boolean }) {
   const [county, setCounty] = useState("");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState(qParam);
-  const [sort, setSort] = useState<keyof ClientListRow>("name");
+  const [sort, setSort] = useState<keyof ClientListRow | null>(null);
   const [dir, setDir] = useState<1 | -1>(1);
   const [createOn, setCreateOn] = useState(false);
   const [form, setForm] = useState({ name: "", industry: "", status: "Active", county: "", businessPhone: "", businessEmail: "", website: "" });
@@ -43,6 +43,7 @@ export function Clients({ toast, admin }: { toast: ToastFn; admin: boolean }) {
 
   const sorted = useMemo(() => {
     if (!rows) return [];
+    if (!sort) return rows;
     return [...rows].sort((a, b) => {
       const av = String(a[sort] ?? "").toLowerCase();
       const bv = String(b[sort] ?? "").toLowerCase();
@@ -51,7 +52,7 @@ export function Clients({ toast, admin }: { toast: ToastFn; admin: boolean }) {
   }, [rows, sort, dir]);
 
   const th = (key: keyof ClientListRow, label: string) => (
-    <th className="th-sort" onClick={() => { if (sort === key) setDir(d => d === 1 ? -1 : 1); else { setSort(key); setDir(1); } }}>{label}</th>
+    <th className="th-sort" onClick={() => { if (sort === key) setDir(d => d === 1 ? -1 : 1); else { setSort(key); setDir(1); } }}>{label}{sort === key ? (dir === 1 ? " ↑" : " ↓") : ""}</th>
   );
 
   const create = async () => {
