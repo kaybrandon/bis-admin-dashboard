@@ -113,6 +113,15 @@ export type FlagRow = {
   createdBy?: string;
 };
 
+export type Lookups = {
+  departments: { id: string; name: string }[];
+  counties: string[];
+  services: { id: string; name?: string; description?: string }[];
+  flagLevels: { id: string; name: string; color?: string; description?: string }[];
+  customFields?: { id: string; name: string; type?: string }[];
+  product?: string;
+};
+
 export const HomeClientsFlagsApi = {
   home: "GET /api/home",
   clients: "GET /api/clients?industry=&county=&status=&q=",
