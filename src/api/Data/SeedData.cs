@@ -104,6 +104,7 @@ public static class SeedData
             Notes = "New-ish. Pair with Maya on first visits."
         };
         db.Users.AddRange(brandon, maya, chris, sam);
+        await db.SaveChangesAsync();
 
         var warning = new FlagLevel { Id = Guid.Parse("33333333-3333-3333-3333-333333333301"), Name = "Warning", Color = "warn", Description = "Red · don’t break this" };
         var care = new FlagLevel { Id = Guid.Parse("33333333-3333-3333-3333-333333333302"), Name = "Care", Color = "care", Description = "Amber · treat this person gently" };
@@ -407,10 +408,10 @@ public static class SeedData
         Mention(brandon.Id, "sticky", db.Stickies.Local.First(s => s.Text.Contains("Van 2")).Id, "Van 2 needs gas before Friday @Brandon", now.AddHours(-2));
         Mention(maya.Id, "post", win.Id, "Shout-out @Maya on the Northstar on-site", now.AddHours(-6));
         Mention(maya.Id, "kudos", Guid.Empty, "@Maya talked a panicked owner off the ledge", now.AddDays(-1));
-        Mention(scott.Id, "note", murray.Id, "Ask @Scott before touching the NAS", now.AddDays(-6));
         Mention(brandon.Id, "post", upd.Id, "Ping @Brandon if you need the shop open.", now.AddDays(-1));
+        Mention(chris.Id, "post", win2.Id, "@Chris owned the floor.", now.AddDays(-2));
 
-        void Tok(string name, string contact, bool internalTok, bool enabled, string hint)
+        void Tok(string name, string? contact, bool internalTok, bool enabled, string hint)
         {
             var raw = "adm_ext_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(12)).ToLowerInvariant();
             db.AccessTokens.Add(new AccessToken

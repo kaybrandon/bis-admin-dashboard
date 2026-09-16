@@ -18,7 +18,7 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         {
             b.UseSetting("ConnectionStrings:Default", "Data Source=data/test-admin.db");
             b.UseSetting("AUTH_SECRET", "test-auth-secret-key-32-bytes-min!!");
-            b.UseSetting("VAULT_DEK", "YmlzLWFkbWluLWxvY2FsLWRldi1vbmx5LWRlay0zMg==");
+            b.UseSetting("VAULT_DEK", "YmlzLWFkbWluLWxvY2FsLW9ubHktdmF1bHQtZGVrMzI=");
             b.UseSetting("SSO_ENABLED", "false");
             b.UseSetting("APP_BASE_URL", "http://localhost:5173");
         });
