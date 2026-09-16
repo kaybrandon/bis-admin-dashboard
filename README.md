@@ -1,5 +1,98 @@
 # BIS Admin Dashboard
 
-Staff Admin app (client file + shop board). .NET API + React SPA.
+Staff **Admin** app (client file + shop board). Product chrome is **Admin** — never Folio.
 
-Product chrome: **Admin** (not Folio).
+Stack (locked): **ASP.NET Core 8 API + React/Vite SPA**. No Next.js. No GIS domain code.
+
+UI: cream page (`#f3f0ea`), sidebar `#1c332c`, accent `#1c7a5c`.
+
+## Local run (mergeable without Azure)
+
+Requires .NET 8 SDK and Node 20+.
+
+```bash
+chmod +x scripts/dev.sh
+./scripts/dev.sh
+```
+
+- API: http://localhost:5080 (`/health`, `/api/...`)
+- SPA: http://localhost:5173 (Vite proxies `/api` to the API)
+- SQLite file: `src/api/data/admin.db` (created + seeded on first start)
+
+### Seed logins (exact AC)
+
+| Name | Email | Role | Manager |
+|------|-------|------|---------|
+| Brandon Kay | brandon@bisconsultants.example | **admin** | — |
+| Maya Chen | maya@bisconsultants.example | **staff** | Brandon |
+| Chris Patel | chris@bisconsultants.example | staff | Brandon |
+| Sam Ortiz | sam@bisconsultants.example | staff | Brandon |
+
+Password for all seed users: **`Admin!2026`**
+
+Work phone `(940) 555-0100` + ext (101 / 204 / 118 / 205). Maya’s birthday is forced in-window for demo.
+
+Clients: Murray Media (Denton, complete), Northstar Dental, Oak + Iron Realty (Collin), Pecan Street Cafe, Harbor Kids Academy (prospect).
+
+Murray Media: Bre primary/pinned · Scott + Jordan IT · Ronnie + Ana Digital · two addresses · Managed IT + M365 on · warning + care flags · vault by department.
+
+### QA smoke
+
+1. Login Brandon → Home week board (America/Chicago).
+2. Open Murray Media → business Call/Email/Map/Website (not “Call Bre”) · vault Reveal · flags visible.
+3. Clock in **Road** + destination → punch on Time.
+4. Add a flag · give a kudos star · Mentions if `@` used.
+5. Login Maya → Export / Admin / Reports / Audit **blocked** · own Time OK.
+6. `/health` reachable.
+
+SSO is **built but off** (`SSO_ENABLED=false`). Idle **15 minutes** signs out (and clocks out).
+
+## RBAC (`staff` | `admin`) — server-enforced
+
+Staff can use the client file, vault reveal/copy, flags, team, own time, #Post It, kudos, mentions, print (no secrets).  
+Admin also gets Reports, Audit, Users/catalog/tokens/settings, and Export.
+
+Access tokens (`adm_ext_…`) are read-only: no vault secrets, no admin routes.
+
+## Vault
+
+AES-256-GCM via `VAULT_DEK` (32-byte key, base64 or hex). Store iv + ciphertext.  
+Never plaintext in logs, list/API payloads, print, export, or audit body.
+
+## Azure (when credentials exist)
+
+Locked names:
+
+| | |
+|---|---|
+| Resource group | `rg-bis-admin-dashboard` |
+| Region | `southcentralus` |
+| API | `app-bis-admin-dashboard-api` |
+| SPA | `app-bis-admin-dashboard` |
+| Blob container | `files` |
+
+Key Vault refs: SQL connection · blob · `BLOB_CONTAINER=files` · `AUTH_SECRET` · `VAULT_DEK` · `APP_BASE_URL`/CORS · `SSO_ENABLED=false`.
+
+HTTPS only. No FTP. SQL is **Entra-only** (no SQL username/password in Bicep).
+
+```bash
+az login
+az account set --subscription <same BIS sub as GIS>
+./scripts/deploy-azure.sh
+```
+
+If `az` is missing, the repo still builds and seeds locally. IaC lives in `infra/main.bicep`.
+
+After Azure deploy: put `AUTH_SECRET` and a 32-byte `VAULT_DEK` in Key Vault, wire App Service references, grant the API identity SQL + blob + KV access, then hit the API once to migrate + seed.
+
+## Repo layout
+
+```
+src/api     ASP.NET Core Web API + EF Core
+src/web     React + Vite SPA
+infra/      Bicep (RG, SQL, storage/files, KV, App Services, Insights)
+scripts/    local + Azure deploy
+tests/      QA smoke (Brandon/Maya/vault/export/token)
+```
+
+`dotnet test` and `npm run build` (in `src/web`) are the CI gates.
