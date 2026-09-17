@@ -15,9 +15,13 @@ public record UserCreateRequest(string Name, string Email, string Role, Guid? De
 public record ProfileUpdateRequest(string? Name, string? PhoneMobile, string? PhoneWork, string? Ext, string? Birthday, int? BirthdayMonth, int? BirthdayDay, int? BirthdayYear, bool? ClearBirthday);
 public record TeamBirthdayRequest(string? Birthday, int? BirthdayMonth, int? BirthdayDay, int? BirthdayYear, bool? ClearBirthday);
 public record ClientCreateRequest(string Name, string? Industry, string? Status, string? County, string? BusinessPhone, string? BusinessEmail, string? Website);
+public record ClientUpdateRequest(string? Name, string? Industry, string? Status, string? County, string? BusinessPhone, string? BusinessEmail, string? Website);
 public record PersonWriteRequest(string Name, string? Title, string? Department, string? Email, string? Phone, bool Pinned, bool Primary);
 public record PersonPinRequest(bool Pinned);
 public record AddressWriteRequest(string Label, string? Line1, string? City, string? State, string? Zip, string? County, string? Hours, bool IsPrimary, string? Phone);
+public record ClientServiceWriteRequest(Guid? ServiceTypeId, bool? On, string? Note);
+public record ClientLinkWriteRequest(string Label, string Url);
+public record ClientVendorWriteRequest(string Kind, string Name, string? Phone);
 public record VaultWriteRequest(string Department, string Title, string? Username, string Secret, string? Url, string? Note);
 public record NamedRequest(string Name, string? Description, string? Color);
 public record TokenCreateRequest(string Name, string? Contact, bool Internal);
@@ -37,7 +41,7 @@ public record ClientListRowDto(Guid Id, string Name, string? Industry, string St
 public record ClientBusinessDto(string? Call, string? Email, string? Map, string? MapLabel, string? Website);
 public record ClientPersonDto(Guid Id, string Name, string? Title, string? Department, string? Email, string? Phone, bool Pinned, bool Primary, string Initials, string? AvatarColor);
 public record ClientAddressDto(Guid Id, string Label, string? Line1, string? City, string? State, string? Zip, string? County, string? Hours, bool IsPrimary, string? Phone, string Maps);
-public record ClientServiceDto(Guid Id, string? Name, bool On, string? Note);
+public record ClientServiceDto(Guid Id, Guid ServiceTypeId, string? Name, bool On, string? Note);
 public record ClientLinkDto(Guid Id, string Label, string Url);
 public record ClientVendorDto(Guid Id, string Kind, string Name, string? Phone);
 public record VaultMaskedDto(Guid Id, string Department, string Title, string? Username, string Secret, string? Url, string? Note);

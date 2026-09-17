@@ -111,6 +111,10 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("BIS Admin API", json);
         Assert.Contains("/api/home", json);
         Assert.Contains("/api/clients", json);
+        Assert.Contains("/api/clients/{id}/services", json);
+        Assert.Contains("/api/clients/{id}/links", json);
+        Assert.Contains("/api/clients/{id}/vendors", json);
+        Assert.Contains("/api/admin/services", json);
         Assert.Contains("/api/flags", json);
         Assert.Contains("HomeBoardDto", json);
         Assert.Contains("ClientFileDto", json);
@@ -228,6 +232,118 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         var ownJson = await own.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(3, DateOnly.Parse(ownJson.GetProperty("birthday").GetString()!).Month);
         Assert.Equal(8, DateOnly.Parse(ownJson.GetProperty("birthday").GetString()!).Day);
+    }
+
+    [Fact]
+    public async Task Brandon_edits_murray_file_and_catalog_maya_cannot_add_catalog()
+    {
+        var client = _factory.CreateClient();
+        var murray = Guid.Parse("66666666-6666-6666-6666-666666666601");
+        var websiteType = Guid.Parse("44444444-4444-4444-4444-444444444404");
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var core = await client.PutAsJsonAsync($"/api/clients/{murray}", new
+        {
+            name = "Murray Media",
+            industry = "Media",
+            status = "Active",
+            county = "Denton",
+            businessPhone = "(940) 555-2599",
+            businessEmail = "info@murraymedia.example",
+            website = "https://murraymedia.example"
+        });
+        core.EnsureSuccessStatusCode();
+
+        var fileAfterCore = await client.GetFromJsonAsync<JsonElement>($"/api/clients/{murray}");
+        Assert.Equal("(940) 555-2599", fileAfterCore.GetProperty("businessPhone").GetString());
+        Assert.Equal("(940) 555-2599", fileAfterCore.GetProperty("business").GetProperty("call").GetString());
+
+        var restorePhone = await client.PutAsJsonAsync($"/api/clients/{murray}", new { businessPhone = "(940) 555-2500" });
+        restorePhone.EnsureSuccessStatusCode();
+
+        var bre = fileAfterCore.GetProperty("people").EnumerateArray().First(p => p.GetProperty("name").GetString() == "Bre");
+        var personEdit = await client.PutAsJsonAsync($"/api/clients/{murray}/people/{bre.GetProperty("id").GetString()}", new
+        {
+            name = "Bre",
+            title = "Owner",
+            department = "Operations",
+            email = "bre@murraymedia.example",
+            phone = "(940) 555-0140",
+            pinned = true,
+            primary = true
+        });
+        personEdit.EnsureSuccessStatusCode();
+
+        var studio = fileAfterCore.GetProperty("addresses").EnumerateArray().First(a => a.GetProperty("label").GetString() == "Studio");
+        var addrEdit = await client.PutAsJsonAsync($"/api/clients/{murray}/addresses/{studio.GetProperty("id").GetString()}", new
+        {
+            label = "Studio",
+            line1 = "1840 Script Lane",
+            city = "Denton",
+            state = "TX",
+            zip = "76201",
+            county = "Denton",
+            hours = "Mon–Fri 8–6",
+            isPrimary = true,
+            phone = "(940) 555-2500"
+        });
+        addrEdit.EnsureSuccessStatusCode();
+
+        var addSvc = await client.PostAsJsonAsync($"/api/clients/{murray}/services", new { serviceTypeId = websiteType, on = true, note = "Host and care" });
+        addSvc.EnsureSuccessStatusCode();
+        var svcId = (await addSvc.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        var editSvc = await client.PutAsJsonAsync($"/api/clients/{murray}/services/{svcId}", new { on = false, note = "Paused" });
+        editSvc.EnsureSuccessStatusCode();
+
+        var addLink = await client.PostAsJsonAsync($"/api/clients/{murray}/links", new { label = "Billing portal", url = "billing.murraymedia.example" });
+        addLink.EnsureSuccessStatusCode();
+        var linkId = (await addLink.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        var editLink = await client.PutAsJsonAsync($"/api/clients/{murray}/links/{linkId}", new { label = "Billing", url = "https://billing.murraymedia.example" });
+        editLink.EnsureSuccessStatusCode();
+
+        var addVendor = await client.PostAsJsonAsync($"/api/clients/{murray}/vendors", new { kind = "Power", name = "Oncor", phone = "(888) 555-0100" });
+        addVendor.EnsureSuccessStatusCode();
+        var vendorId = (await addVendor.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        var editVendor = await client.PutAsJsonAsync($"/api/clients/{murray}/vendors/{vendorId}", new { kind = "Power", name = "Oncor Electric", phone = "(888) 555-0100" });
+        editVendor.EnsureSuccessStatusCode();
+
+        var file = await client.GetFromJsonAsync<JsonElement>($"/api/clients/{murray}");
+        Assert.Contains(file.GetProperty("services").EnumerateArray(), s => s.GetProperty("name").GetString() == "Website" && !s.GetProperty("on").GetBoolean());
+        Assert.Contains(file.GetProperty("links").EnumerateArray(), l => l.GetProperty("label").GetString() == "Billing" && l.GetProperty("url").GetString() == "https://billing.murraymedia.example");
+        Assert.Contains(file.GetProperty("vendors").EnumerateArray(), v => v.GetProperty("name").GetString() == "Oncor Electric");
+
+        var delSvc = await client.DeleteAsync($"/api/clients/{murray}/services/{svcId}");
+        delSvc.EnsureSuccessStatusCode();
+        var delLink = await client.DeleteAsync($"/api/clients/{murray}/links/{linkId}");
+        delLink.EnsureSuccessStatusCode();
+        var delVendor = await client.DeleteAsync($"/api/clients/{murray}/vendors/{vendorId}");
+        delVendor.EnsureSuccessStatusCode();
+
+        var catalogName = "Slice C Catalog " + Guid.NewGuid().ToString("N")[..8];
+        var addCatalog = await client.PostAsJsonAsync("/api/admin/services", new { name = catalogName, description = "Admin-added type" });
+        addCatalog.EnsureSuccessStatusCode();
+        var catalog = await addCatalog.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(catalogName, catalog.GetProperty("name").GetString());
+        var lookups = await client.GetFromJsonAsync<JsonElement>("/api/lookups");
+        Assert.Contains(lookups.GetProperty("services").EnumerateArray(), s => s.GetProperty("name").GetString() == catalogName);
+
+        var audit = await client.GetFromJsonAsync<JsonElement>("/api/audit");
+        var auditJson = audit.ToString();
+        Assert.Contains("clientService", auditJson);
+        Assert.Contains("serviceType", auditJson);
+        Assert.DoesNotContain("not-a-real-nas-secret", auditJson);
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+        var blocked = await client.PostAsJsonAsync("/api/admin/services", new { name = "Maya should not add this" });
+        Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
+        var staffEdit = await client.PutAsJsonAsync($"/api/clients/{murray}", new { county = "Denton" });
+        staffEdit.EnsureSuccessStatusCode();
+        var staffSvc = await client.PostAsJsonAsync($"/api/clients/{murray}/services", new { serviceTypeId = websiteType, on = true, note = "Staff add" });
+        staffSvc.EnsureSuccessStatusCode();
+        var staffSvcId = (await staffSvc.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        (await client.DeleteAsync($"/api/clients/{murray}/services/{staffSvcId}")).EnsureSuccessStatusCode();
     }
 
     private static async Task<JsonElement> Login(HttpClient client, string email)

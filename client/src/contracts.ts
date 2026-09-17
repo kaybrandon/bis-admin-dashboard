@@ -85,7 +85,7 @@ export type ClientFile = {
     phone?: string;
     maps: string;
   }[];
-  services: { id: string; name?: string; on: boolean; note?: string }[];
+  services: { id: string; serviceTypeId?: string; name?: string; on: boolean; note?: string }[];
   links: { id: string; label: string; url: string }[];
   vendors: { id: string; kind: string; name: string; phone?: string }[];
   /** secret is always "••••••••" until POST …/reveal */
@@ -126,12 +126,25 @@ export const HomeClientsFlagsApi = {
   home: "GET /api/home",
   clients: "GET /api/clients?industry=&county=&status=&q=&service=",
   createClient: "POST /api/clients  { name, industry?, status?, county?, businessPhone?, businessEmail?, website? }",
+  updateClient: "PUT /api/clients/{id}  { name?, industry?, status?, county?, businessPhone?, businessEmail?, website? }",
   clientFile: "GET /api/clients/{id}",
   print: "GET /api/clients/{id}/print  (no vault, no care flags)",
   addPerson: "POST /api/clients/{id}/people",
+  editPerson: "PUT /api/clients/{id}/people/{personId}",
   pinPerson: "POST /api/clients/{id}/people/{personId}/pin  { pinned }",
   addAddress: "POST /api/clients/{id}/addresses",
+  editAddress: "PUT /api/clients/{id}/addresses/{addressId}",
+  addService: "POST /api/clients/{id}/services  { serviceTypeId, on?, note? }",
+  editService: "PUT /api/clients/{id}/services/{serviceId}  { serviceTypeId?, on?, note? }",
+  removeService: "DELETE /api/clients/{id}/services/{serviceId}",
+  addLink: "POST /api/clients/{id}/links  { label, url }",
+  editLink: "PUT /api/clients/{id}/links/{linkId}",
+  removeLink: "DELETE /api/clients/{id}/links/{linkId}",
+  addVendor: "POST /api/clients/{id}/vendors  { kind, name, phone? }",
+  editVendor: "PUT /api/clients/{id}/vendors/{vendorId}",
+  removeVendor: "DELETE /api/clients/{id}/vendors/{vendorId}",
   addNote: "POST /api/clients/{id}/notes  { body }  (@Name creates a mention)",
+  addCatalogService: "POST /api/admin/services  { name, description? }  Admin only",
   vaultList: "GET /api/clients/{id}/vault  (masked)",
   vaultAdd: "POST /api/clients/{id}/vault  { department, title, username?, secret, url?, note? }",
   vaultReveal: "POST /api/clients/{id}/vault/{credId}/reveal  → { secret }  (human staff only)",

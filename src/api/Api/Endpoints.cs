@@ -257,6 +257,28 @@ public static class Endpoints
             return Results.Ok(ClientFile(c, includeVaultMasked: true, includeCareFlags: true));
         }).RequireAuthorization().WithTags("Clients").Produces<ClientFileDto>();
 
+        api.MapPut("/clients/{id:guid}", async (HttpContext ctx, Guid id, ClientUpdateRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            var c = await db.Clients.FirstOrDefaultAsync(x => x.Id == id);
+            if (c is null) return Results.NotFound();
+            if (req.Name is not null && string.IsNullOrWhiteSpace(req.Name))
+                return Results.BadRequest(new { error = "Name the client" });
+            var before = new { c.Name, c.Industry, c.Status, c.County, c.BusinessPhone, c.BusinessEmail, c.Website };
+            if (req.Name is not null) c.Name = req.Name.Trim();
+            if (req.Industry is not null) c.Industry = BlankToNull(req.Industry);
+            if (req.Status is not null) c.Status = string.IsNullOrWhiteSpace(req.Status) ? "Active" : req.Status.Trim();
+            if (req.County is not null) c.County = BlankToNull(req.County);
+            if (req.BusinessPhone is not null) c.BusinessPhone = BlankToNull(req.BusinessPhone);
+            if (req.BusinessEmail is not null) c.BusinessEmail = BlankToNull(req.BusinessEmail);
+            if (req.Website is not null) c.Website = BlankToNull(NormalizeUrl(req.Website));
+            Touch(c, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "client", c.Id, c.Id, before, new { c.Name, c.Industry, c.Status, c.County, c.BusinessPhone, c.BusinessEmail, c.Website }, null);
+            return Results.Ok(new { c.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
         api.MapGet("/clients/{id:guid}/print", async (HttpContext ctx, Guid id, AppDbContext db) =>
         {
             var deny = Authz.RequireHumanStaff(ctx);
@@ -303,6 +325,37 @@ public static class Endpoints
             return Results.Ok(new { p.Id, p.Pinned });
         }).RequireAuthorization();
 
+        api.MapPut("/clients/{id:guid}/people/{personId:guid}", async (HttpContext ctx, Guid id, Guid personId, PersonWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (string.IsNullOrWhiteSpace(req.Name)) return Results.BadRequest(new { error = "Name the person" });
+            var p = await db.People.FirstOrDefaultAsync(x => x.Id == personId && x.ClientId == id);
+            if (p is null) return Results.NotFound();
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+            if (client is null) return Results.NotFound();
+            var before = new { p.Name, p.Title, p.Department, p.Email, p.Phone, p.Pinned, p.Primary };
+            p.Name = req.Name.Trim();
+            p.Title = BlankToNull(req.Title);
+            p.Department = BlankToNull(req.Department);
+            p.Email = BlankToNull(req.Email);
+            p.Phone = BlankToNull(req.Phone);
+            p.Pinned = req.Pinned || req.Primary;
+            p.Primary = req.Primary;
+            if (req.Primary)
+            {
+                var others = await db.People.Where(x => x.ClientId == id && x.Id != p.Id).ToListAsync();
+                foreach (var o in others) o.Primary = false;
+                client.PrimaryPersonId = p.Id;
+            }
+            else if (client.PrimaryPersonId == p.Id)
+                client.PrimaryPersonId = null;
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "person", p.Id, id, before, new { p.Name, p.Title, p.Department, p.Email, p.Phone, p.Pinned, p.Primary }, null);
+            return Results.Ok(new { p.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
         api.MapPost("/clients/{id:guid}/addresses", async (HttpContext ctx, Guid id, AddressWriteRequest req, AppDbContext db, AuditWriter audit) =>
         {
             var deny = Authz.RequireHumanStaff(ctx);
@@ -318,6 +371,36 @@ public static class Endpoints
             return Results.Ok(new { a.Id });
         }).RequireAuthorization();
 
+        api.MapPut("/clients/{id:guid}/addresses/{addressId:guid}", async (HttpContext ctx, Guid id, Guid addressId, AddressWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (string.IsNullOrWhiteSpace(req.Label)) return Results.BadRequest(new { error = "Label the address" });
+            var a = await db.Addresses.FirstOrDefaultAsync(x => x.Id == addressId && x.ClientId == id);
+            if (a is null) return Results.NotFound();
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+            if (client is null) return Results.NotFound();
+            var before = new { a.Label, a.Line1, a.City, a.State, a.Zip, a.County, a.Hours, a.IsPrimary, a.Phone };
+            a.Label = req.Label.Trim();
+            a.Line1 = BlankToNull(req.Line1);
+            a.City = BlankToNull(req.City);
+            a.State = BlankToNull(req.State);
+            a.Zip = BlankToNull(req.Zip);
+            a.County = BlankToNull(req.County);
+            a.Hours = BlankToNull(req.Hours);
+            a.Phone = BlankToNull(req.Phone);
+            a.IsPrimary = req.IsPrimary;
+            if (req.IsPrimary)
+            {
+                var others = await db.Addresses.Where(x => x.ClientId == id && x.Id != a.Id).ToListAsync();
+                foreach (var o in others) o.IsPrimary = false;
+            }
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "address", a.Id, id, before, new { a.Label, a.Line1, a.City, a.State, a.Zip, a.IsPrimary }, null);
+            return Results.Ok(new { a.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
         api.MapPost("/clients/{id:guid}/notes", async (HttpContext ctx, Guid id, CommentCreateRequest req, AppDbContext db, AuditWriter audit, MentionService mentions) =>
         {
             var deny = Authz.RequireHumanStaff(ctx);
@@ -329,6 +412,167 @@ public static class Endpoints
             await audit.WriteAsync(n.CreatedById, "create", "note", n.Id, id, null, new { body = req.Body }, null);
             return Results.Ok(new { n.Id });
         }).RequireAuthorization();
+
+        api.MapPost("/clients/{id:guid}/services", async (HttpContext ctx, Guid id, ClientServiceWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (req.ServiceTypeId is not Guid typeId)
+                return Results.BadRequest(new { error = "Pick a service from the catalog." });
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+            if (client is null) return Results.NotFound();
+            if (!await db.ServiceTypes.AnyAsync(t => t.Id == typeId))
+                return Results.BadRequest(new { error = "Unknown service type." });
+            if (await db.ClientServices.AnyAsync(s => s.ClientId == id && s.ServiceTypeId == typeId))
+                return Results.BadRequest(new { error = "That service is already on this file." });
+            var s = new ClientService
+            {
+                Id = Guid.NewGuid(), ClientId = id, ServiceTypeId = typeId, On = req.On ?? true, Note = BlankToNull(req.Note)
+            };
+            db.ClientServices.Add(s);
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "clientService", s.Id, id, null, new { s.ServiceTypeId, s.On, s.Note }, null);
+            return Results.Ok(new { s.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
+        api.MapPut("/clients/{id:guid}/services/{serviceId:guid}", async (HttpContext ctx, Guid id, Guid serviceId, ClientServiceWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            var s = await db.ClientServices.FirstOrDefaultAsync(x => x.Id == serviceId && x.ClientId == id);
+            if (s is null) return Results.NotFound();
+            var client = await db.Clients.FirstAsync(c => c.Id == id);
+            var before = new { s.ServiceTypeId, s.On, s.Note };
+            if (req.ServiceTypeId is Guid typeId && typeId != s.ServiceTypeId)
+            {
+                if (!await db.ServiceTypes.AnyAsync(t => t.Id == typeId))
+                    return Results.BadRequest(new { error = "Unknown service type." });
+                if (await db.ClientServices.AnyAsync(x => x.ClientId == id && x.ServiceTypeId == typeId && x.Id != s.Id))
+                    return Results.BadRequest(new { error = "That service is already on this file." });
+                s.ServiceTypeId = typeId;
+            }
+            if (req.On is bool on) s.On = on;
+            if (req.Note is not null) s.Note = BlankToNull(req.Note);
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "clientService", s.Id, id, before, new { s.ServiceTypeId, s.On, s.Note }, null);
+            return Results.Ok(new { s.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
+        api.MapDelete("/clients/{id:guid}/services/{serviceId:guid}", async (HttpContext ctx, Guid id, Guid serviceId, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            var s = await db.ClientServices.FirstOrDefaultAsync(x => x.Id == serviceId && x.ClientId == id);
+            if (s is null) return Results.NotFound();
+            var client = await db.Clients.FirstAsync(c => c.Id == id);
+            var before = new { s.ServiceTypeId, s.On, s.Note };
+            db.ClientServices.Remove(s);
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "delete", "clientService", serviceId, id, before, null, null);
+            return Results.Ok(new { ok = true });
+        }).RequireAuthorization().WithTags("Clients");
+
+        api.MapPost("/clients/{id:guid}/links", async (HttpContext ctx, Guid id, ClientLinkWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (string.IsNullOrWhiteSpace(req.Label) || string.IsNullOrWhiteSpace(req.Url))
+                return Results.BadRequest(new { error = "Label and URL needed" });
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+            if (client is null) return Results.NotFound();
+            var l = new Link { Id = Guid.NewGuid(), ClientId = id, Label = req.Label.Trim(), Url = NormalizeUrl(req.Url)! };
+            db.Links.Add(l);
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "link", l.Id, id, null, new { l.Label, l.Url }, null);
+            return Results.Ok(new { l.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
+        api.MapPut("/clients/{id:guid}/links/{linkId:guid}", async (HttpContext ctx, Guid id, Guid linkId, ClientLinkWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (string.IsNullOrWhiteSpace(req.Label) || string.IsNullOrWhiteSpace(req.Url))
+                return Results.BadRequest(new { error = "Label and URL needed" });
+            var l = await db.Links.FirstOrDefaultAsync(x => x.Id == linkId && x.ClientId == id);
+            if (l is null) return Results.NotFound();
+            var client = await db.Clients.FirstAsync(c => c.Id == id);
+            var before = new { l.Label, l.Url };
+            l.Label = req.Label.Trim();
+            l.Url = NormalizeUrl(req.Url)!;
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "link", l.Id, id, before, new { l.Label, l.Url }, null);
+            return Results.Ok(new { l.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
+        api.MapDelete("/clients/{id:guid}/links/{linkId:guid}", async (HttpContext ctx, Guid id, Guid linkId, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            var l = await db.Links.FirstOrDefaultAsync(x => x.Id == linkId && x.ClientId == id);
+            if (l is null) return Results.NotFound();
+            var client = await db.Clients.FirstAsync(c => c.Id == id);
+            var before = new { l.Label, l.Url };
+            db.Links.Remove(l);
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "delete", "link", linkId, id, before, null, null);
+            return Results.Ok(new { ok = true });
+        }).RequireAuthorization().WithTags("Clients");
+
+        api.MapPost("/clients/{id:guid}/vendors", async (HttpContext ctx, Guid id, ClientVendorWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (string.IsNullOrWhiteSpace(req.Kind) || string.IsNullOrWhiteSpace(req.Name))
+                return Results.BadRequest(new { error = "Kind and name needed" });
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+            if (client is null) return Results.NotFound();
+            var v = new Vendor { Id = Guid.NewGuid(), ClientId = id, Kind = req.Kind.Trim(), Name = req.Name.Trim(), Phone = BlankToNull(req.Phone) };
+            db.Vendors.Add(v);
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "vendor", v.Id, id, null, new { v.Kind, v.Name, v.Phone }, null);
+            return Results.Ok(new { v.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
+        api.MapPut("/clients/{id:guid}/vendors/{vendorId:guid}", async (HttpContext ctx, Guid id, Guid vendorId, ClientVendorWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (string.IsNullOrWhiteSpace(req.Kind) || string.IsNullOrWhiteSpace(req.Name))
+                return Results.BadRequest(new { error = "Kind and name needed" });
+            var v = await db.Vendors.FirstOrDefaultAsync(x => x.Id == vendorId && x.ClientId == id);
+            if (v is null) return Results.NotFound();
+            var client = await db.Clients.FirstAsync(c => c.Id == id);
+            var before = new { v.Kind, v.Name, v.Phone };
+            v.Kind = req.Kind.Trim();
+            v.Name = req.Name.Trim();
+            v.Phone = BlankToNull(req.Phone);
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "vendor", v.Id, id, before, new { v.Kind, v.Name, v.Phone }, null);
+            return Results.Ok(new { v.Id });
+        }).RequireAuthorization().WithTags("Clients").Produces<CreatedIdDto>();
+
+        api.MapDelete("/clients/{id:guid}/vendors/{vendorId:guid}", async (HttpContext ctx, Guid id, Guid vendorId, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            var v = await db.Vendors.FirstOrDefaultAsync(x => x.Id == vendorId && x.ClientId == id);
+            if (v is null) return Results.NotFound();
+            var client = await db.Clients.FirstAsync(c => c.Id == id);
+            var before = new { v.Kind, v.Name, v.Phone };
+            db.Vendors.Remove(v);
+            Touch(client, Authz.Actor(ctx).Id);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "delete", "vendor", vendorId, id, before, null, null);
+            return Results.Ok(new { ok = true });
+        }).RequireAuthorization().WithTags("Clients");
 
         api.MapGet("/clients/{id:guid}/vault", async (HttpContext ctx, Guid id, AppDbContext db) =>
         {
@@ -884,11 +1128,16 @@ public static class Endpoints
         });
 
         admin.MapGet("/services", async (AppDbContext db) => Results.Ok(await db.ServiceTypes.OrderBy(s => s.Name).ToListAsync()));
-        admin.MapPost("/services", async (NamedRequest req, AppDbContext db) =>
+        admin.MapPost("/services", async (HttpContext ctx, NamedRequest req, AppDbContext db, AuditWriter audit) =>
         {
-            var s = new ServiceType { Id = Guid.NewGuid(), Name = req.Name, Description = req.Description };
+            if (string.IsNullOrWhiteSpace(req.Name)) return Results.BadRequest(new { error = "Name the service." });
+            var name = req.Name.Trim();
+            if (await db.ServiceTypes.AnyAsync(s => s.Name.ToLower() == name.ToLower()))
+                return Results.BadRequest(new { error = "That service is already in the catalog." });
+            var s = new ServiceType { Id = Guid.NewGuid(), Name = name, Description = BlankToNull(req.Description) };
             db.ServiceTypes.Add(s);
             await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "serviceType", s.Id, null, null, new { s.Name, s.Description }, null);
             return Results.Ok(s);
         });
 
@@ -1105,7 +1354,7 @@ public static class Endpoints
                 a.Id, a.Label, a.Line1, a.City, a.State, a.Zip, a.County, a.Hours, a.IsPrimary, a.Phone,
                 maps = $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString($"{a.Line1}, {a.City}, {a.State} {a.Zip}")}"
             }),
-            services = c.Services.Select(s => new { s.Id, name = s.ServiceType?.Name, s.On, s.Note }),
+            services = c.Services.Select(s => new { s.Id, serviceTypeId = s.ServiceTypeId, name = s.ServiceType?.Name, s.On, s.Note }),
             links = c.Links.Select(l => new { l.Id, l.Label, l.Url }),
             vendors = c.Vendors.Select(v => new { v.Id, v.Kind, v.Name, v.Phone }),
             vault = includeVaultMasked && !print ? c.Credentials.Select(Maps.VaultMasked) : Array.Empty<object>(),
@@ -1186,6 +1435,23 @@ public static class Endpoints
         foreach (var g in punches.GroupBy(p => p.Workplace))
             result[g.Key] = Hours(g.ToList());
         return result;
+    }
+
+    private static void Touch(Client c, Guid? actorId)
+    {
+        c.UpdatedAt = DateTime.UtcNow;
+        c.UpdatedById = actorId;
+    }
+
+    private static string? BlankToNull(string? v) =>
+        string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+
+    private static string? NormalizeUrl(string? url)
+    {
+        var v = BlankToNull(url);
+        if (v is null) return null;
+        if (v.Contains("://", StringComparison.Ordinal)) return v;
+        return "https://" + v;
     }
 
     private static string Csv(string? v)

@@ -670,7 +670,12 @@ function AdminPage({ toast }: { toast: ToastFn }) {
           </table></div>
         </div>
         <div className="card mod"><div className="mod-h"><h2>Departments</h2></div>{deps.map(d => <div className="row" key={d.id}><strong>{d.name}</strong></div>)}</div>
-        <div className="card mod span2"><div className="mod-h"><h2>Service catalog</h2></div>{svcs.map(s => <div className="row" key={s.id}><div><strong>{s.name}</strong><div className="muted">{s.description}</div></div></div>)}</div>
+        <div className="card mod span2">
+          <div className="mod-h"><h2>Service catalog</h2><span className="chip on">Admin only</span></div>
+          <p className="muted" style={{ marginBottom: 8 }}>Types staff pick when assigning services on a client file. Staff cannot add here.</p>
+          <CatalogAdd onAdded={async () => setSvcs(await api("/api/admin/services"))} toast={toast} />
+          {svcs.map(s => <div className="row" key={s.id}><div><strong>{s.name}</strong><div className="muted">{s.description}</div></div></div>)}
+        </div>
         <div className="card mod span2"><div className="mod-h"><h2>Flag levels</h2></div>{levels.map(l => <div className="row" key={l.id}><div><strong>{l.name}</strong><div className="muted">{l.description}</div></div><span className={"chip " + l.color}>{l.name}</span></div>)}</div>
         <div className="card mod span2">
           <div className="mod-h"><h2>Single sign-on</h2><span className="chip">{settings?.ssoEnabled ? "On" : "Off"}</span></div>
@@ -702,6 +707,26 @@ function AdminPage({ toast }: { toast: ToastFn }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function CatalogAdd({ onAdded, toast }: { onAdded: () => Promise<void>; toast: ToastFn }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  return (
+    <div className="form-grid" style={{ marginBottom: 12 }}>
+      <input className="sel" placeholder="Service name" value={name} onChange={e => setName(e.target.value)} aria-label="Catalog service name" />
+      <input className="sel" placeholder="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} aria-label="Catalog service description" />
+      <button className="btn p" onClick={async () => {
+        if (!name.trim()) { toast("Name the service"); return; }
+        try {
+          await api("/api/admin/services", { method: "POST", body: JSON.stringify({ name: name.trim(), description: description.trim() || undefined }) });
+          toast("Catalog service added");
+          setName(""); setDescription("");
+          await onAdded();
+        } catch (e) { toast((e as Error).message); }
+      }}>Add service</button>
+    </div>
   );
 }
 
