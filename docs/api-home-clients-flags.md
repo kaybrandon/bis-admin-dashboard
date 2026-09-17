@@ -27,11 +27,16 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 |---|---|
 | List | `GET /api/clients?industry=&county=&status=&q=&service=` → `ClientListRowDto[]` (`service` = catalog name or id; on services only) |
 | Create | `POST /api/clients` `ClientCreateRequest` → `{ id }` |
+| Update | `PUT /api/clients/{id}` `ClientUpdateRequest` — name, industry, status, county, business phone/email/website |
 | File | `GET /api/clients/{id}` → `ClientFileDto` |
 | Print | `GET /api/clients/{id}/print` — **no vault, no care flags** |
-| People | `POST /api/clients/{id}/people` `PersonWriteRequest` |
-| Addresses | `POST /api/clients/{id}/addresses` `AddressWriteRequest` |
+| People | `POST /api/clients/{id}/people` · `PUT /api/clients/{id}/people/{personId}` `PersonWriteRequest` |
+| Addresses | `POST /api/clients/{id}/addresses` · `PUT /api/clients/{id}/addresses/{addressId}` `AddressWriteRequest` |
+| Services | `POST/PUT/DELETE /api/clients/{id}/services[/{serviceId}]` `{ serviceTypeId, on?, note? }` (catalog type; no free-text type) |
+| Links | `POST/PUT/DELETE /api/clients/{id}/links[/{linkId}]` `{ label, url }` |
+| Vendors | `POST/PUT/DELETE /api/clients/{id}/vendors[/{vendorId}]` `{ kind, name, phone? }` |
 | Notes | `POST /api/clients/{id}/notes` `{ body }` (`@Name` → mention) |
+| Catalog add | `POST /api/admin/services` `{ name, description? }` — **Admin only**; staff 403 |
 | Vault list | `GET /api/clients/{id}/vault` — `secret` is always `••••••••` |
 | Vault add | `POST /api/clients/{id}/vault` `{ department, title, username?, secret, url?, note? }` |
 | Reveal | `POST /api/clients/{id}/vault/{credId}/reveal` → `{ secret }` human staff only |

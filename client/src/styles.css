@@ -201,7 +201,11 @@ body[data-role="staff"] .admin-only{display:none!important}
 .client-file-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
 .client-file-id{display:flex;gap:14px;align-items:flex-start;min-width:0}
 .client-file-id-body{min-width:0}
+.client-file-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.client-file-title h1{font-size:24px;letter-spacing:-.03em;line-height:1.1;font-weight:700;margin:0}
 .client-file-id-body h1{font-size:24px;letter-spacing:-.03em;line-height:1.1;font-weight:700}
+.row-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+.client-file .biglink{flex:1;min-width:0;border-top:0;padding:0}
 .client-file .mark{width:40px;height:40px;border-radius:10px}
 .client-file .meta{margin-top:8px}
 .client-file-tools{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;flex-shrink:0}
