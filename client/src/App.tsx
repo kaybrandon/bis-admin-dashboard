@@ -92,6 +92,10 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
   const nav = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
   const [whereOn, setWhereOn] = useState(false);
+  const [roadOn, setRoadOn] = useState(false);
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [destId, setDestId] = useState("");
+  const [destOther, setDestOther] = useState("");
   const [presence, setPresence] = useState<any[]>([]);
   const [q, setQ] = useState("");
   const clocked = !!user.openPunch;
@@ -99,20 +103,38 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
 
   useEffect(() => { api<any[]>("/api/presence").then(setPresence).catch(() => {}); }, [user.openPunch]);
   useEffect(() => { document.body.classList.toggle("nav-open", navOpen); }, [navOpen]);
+  useEffect(() => {
+    if (!whereOn) {
+      setRoadOn(false);
+      setDestId("");
+      setDestOther("");
+      return;
+    }
+    api<{ id: string; name: string }[]>("/api/clients")
+      .then(rows => setClients(rows.map(r => ({ id: r.id, name: r.name }))))
+      .catch(() => setClients([]));
+  }, [whereOn]);
 
-  const clock = async (workplace?: string) => {
+  const clock = async (workplace?: string, destination?: string) => {
     setWhereOn(false);
+    setRoadOn(false);
     if (clocked) {
       await api("/api/time/clock", { method: "POST", body: JSON.stringify({ dir: "out", workplace: place }) });
       toast("Clocked out");
     } else {
-      let destination: string | undefined;
-      if (workplace === "road") destination = prompt("Heading where?", "Murray Media") || undefined;
       if (workplace === "road" && !destination) return;
       await api("/api/time/clock", { method: "POST", body: JSON.stringify({ dir: "in", workplace, destination }) });
       toast("Clocked in · " + (workplace || "office") + (destination ? " · " + destination : ""));
     }
     setUser(await me());
+  };
+
+  const pickRoadDest = (value: string) => {
+    setDestId(value);
+    if (value && value !== "__other") {
+      const name = clients.find(c => c.id === value)?.name;
+      if (name) void clock("road", name);
+    }
   };
 
   const signOut = async () => {
@@ -168,9 +190,31 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
             <button className="btn p" onClick={() => clocked ? clock() : setWhereOn(v => !v)}>{clocked ? "Clock out" : "Clock in"}</button>
             {clocked && <button className="btn s" onClick={() => setWhereOn(v => !v)}>{place || "Place"}</button>}
             <div className={"where-pop" + (whereOn ? " on" : "")}>
-              <button onClick={() => clock("office")}>Office</button>
-              <button onClick={() => clock("road")}>Road</button>
-              <button onClick={() => clock("home")}>Home</button>
+              <button type="button" onClick={() => clock("office")}>Office</button>
+              <button type="button" className="place-road" onClick={() => setRoadOn(true)}>
+                Road <span className="visit">Client Visit</span>
+              </button>
+              {roadOn && (
+                <div className="road-dest">
+                  <label className="muted">Destination</label>
+                  <select className="sel" value={destId} onChange={e => pickRoadDest(e.target.value)} aria-label="Road destination">
+                    <option value="">Select client…</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <option value="__other">Other…</option>
+                  </select>
+                  {destId === "__other" && (
+                    <>
+                      <input className="sel" placeholder="Where are you headed?" value={destOther} onChange={e => setDestOther(e.target.value)} aria-label="Other destination" />
+                      <button type="button" className="btn p dest-go" onClick={() => {
+                        const d = destOther.trim();
+                        if (!d) { toast("Type a destination"); return; }
+                        void clock("road", d);
+                      }}>Clock in Road</button>
+                    </>
+                  )}
+                </div>
+              )}
+              <button type="button" onClick={() => clock("home")}>Home</button>
             </div>
           </div>
         </div>
