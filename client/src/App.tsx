@@ -164,8 +164,6 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
         {admin && <NavBtn on={() => go("/reports")} active={active("/reports")} label="Reports" />}
         {admin && <NavBtn on={() => go("/admin")} active={active("/admin")} label="Admin" />}
         <NavBtn on={() => go("/settings")} active={active("/settings")} label="Settings" />
-        <div className="nav-label">Open</div>
-        <button className="nav-btn" onClick={() => go("/clients/66666666-6666-6666-6666-666666666601")}>Murray Media</button>
         <div className="nav-label">Signed in</div>
         <div className="presence">
           {presence.map(p => (
