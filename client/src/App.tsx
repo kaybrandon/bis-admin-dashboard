@@ -133,7 +133,7 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
         <NavBtn on={() => go("/clients")} active={active("/clients")} label="Clients" />
         <NavBtn on={() => go("/flags")} active={active("/flags")} label="Flags" />
         <NavBtn on={() => go("/team")} active={active("/team")} label="Team" />
-        <NavBtn on={() => go("/time")} active={active("/time")} label="Time" />
+        <NavBtn on={() => go("/time")} active={active("/time")} label="My Time" />
         <NavBtn on={() => go("/post-it")} active={active("/post-it")} label="#Post It" />
         <NavBtn on={() => go("/kudos")} active={active("/kudos")} label="Kudos" />
         <NavBtn on={() => go("/mentions")} active={active("/mentions")} label="@Mentions" />
@@ -326,7 +326,7 @@ function Time({ user, setUser, toast }: { user: User; setUser: (u: User) => void
   if (!data) return <p>Loading punches…</p>;
   return (
     <section>
-      <div className="h"><div><h1>Time</h1><p>Your punches. Clock in from the header — it lands here.</p></div></div>
+      <div className="h"><div><h1>My Time</h1><p>Your punches. Clock in from the header — it lands here.</p></div></div>
       <div className="stats">
         <div className="stat"><span>Today</span><b>{data.todayHours}h</b></div>
         <div className="stat"><span>This week</span><b>{data.weekHours}h</b></div>
