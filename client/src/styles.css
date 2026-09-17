@@ -95,6 +95,10 @@ tr.go:hover td{background:#faf6ef}
   .scrim{display:none;position:fixed;inset:0;background:rgba(18,22,20,.45);z-index:20}
   body.nav-open .scrim{display:block}
   .menu{display:inline-flex;align-items:center;justify-content:center}
+  .who-meta{display:none}
+  .top .btn.s{display:none}
+  .search{max-width:min(140px,28vw)}
+  .clock-status{padding:4px 6px;font-size:12px}
   .content{padding:16px 14px 88px}
   .stats,.modules{grid-template-columns:1fr 1fr}
   .file-top{grid-template-columns:1fr}
