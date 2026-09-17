@@ -98,6 +98,7 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
   const [destOther, setDestOther] = useState("");
   const [presence, setPresence] = useState<any[]>([]);
   const [q, setQ] = useState("");
+  const clockBtnRef = useRef<HTMLButtonElement>(null);
   const clocked = !!user.openPunch;
   const place = user.openPunch?.workplace;
 
@@ -182,12 +183,19 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
           <button className="menu" aria-label="Open menu" onClick={() => setNavOpen(v => !v)}>☰</button>
           <input className="search" placeholder="Search clients, people, addresses" value={q} onChange={e => setQ(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") nav("/clients?q=" + encodeURIComponent(q)); }} />
+          <button
+            type="button"
+            className={"clock-status" + (clocked ? " in" : "")}
+            onClick={() => { setWhereOn(true); clockBtnRef.current?.focus(); }}
+          >
+            {clockStatusCopy(user.openPunch)}
+          </button>
           <div className="who-chip">
             <button className="photo-btn" onClick={() => nav("/me")} title="My profile" aria-label="My profile"><div className="me">{user.initials}</div></button>
             <button onClick={() => nav("/me")} style={{ border: 0, background: "transparent", textAlign: "left", padding: 0 }}>
               <div className="who-meta">{user.name}</div>
             </button>
-            <button className="btn p" onClick={() => clocked ? clock() : setWhereOn(v => !v)}>{clocked ? "Clock out" : "Clock in"}</button>
+            <button ref={clockBtnRef} className="btn p" onClick={() => clocked ? clock() : setWhereOn(v => !v)}>{clocked ? "Clock out" : "Clock in"}</button>
             {clocked && <button className="btn s" onClick={() => setWhereOn(v => !v)}>{place || "Place"}</button>}
             <div className={"where-pop" + (whereOn ? " on" : "")}>
               <button type="button" onClick={() => clock("office")}>Office</button>
@@ -220,10 +228,6 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
         </div>
         <div className="scrim" onClick={() => setNavOpen(false)} />
         <div className="content">
-          {!clocked && loc.pathname !== "/login" && (
-            <div className="nudge"><div>You’re signed in and not punched. Clock in so the shop knows where you are.</div>
-              <button className="btn p" onClick={() => setWhereOn(true)}>Clock in</button></div>
-          )}
           <Routes>
             <Route path="/" element={<Home user={user} toast={toast} />} />
             <Route path="/clients" element={<Clients toast={toast} admin={admin} />} />
@@ -250,6 +254,22 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
 
 function NavBtn({ on, active, label }: { on: () => void; active: boolean; label: string }) {
   return <button className={"nav-btn" + (active ? " active" : "")} onClick={on}>{label}</button>;
+}
+
+function punchPlaceLabel(workplace?: string) {
+  if (workplace === "office") return "Office";
+  if (workplace === "road") return "Road";
+  if (workplace === "home") return "Home";
+  if (!workplace) return "";
+  return workplace.charAt(0).toUpperCase() + workplace.slice(1);
+}
+
+function clockStatusCopy(open?: User["openPunch"]) {
+  if (!open) return "Not clocked in";
+  const place = punchPlaceLabel(open.workplace) || "In";
+  return open.destination
+    ? `Clocked in · ${place} · ${open.destination}`
+    : `Clocked in · ${place}`;
 }
 
 function Team({ toast, admin }: { toast: ToastFn; admin: boolean }) {
