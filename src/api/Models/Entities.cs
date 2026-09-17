@@ -112,6 +112,14 @@ public class ServiceType
     public string? Description { get; set; }
 }
 
+public class PersonTitle
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public bool Retired { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 public class ClientService
 {
     public Guid Id { get; set; }

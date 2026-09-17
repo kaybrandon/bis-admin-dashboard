@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { copyVaultPassword } from "../clipboardVault";
@@ -157,7 +157,11 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   const [lookups, setLookups] = useState<Lookups | null>(null);
   const [err, setErr] = useState("");
   const [revealed, setRevealed] = useState<Record<string, string>>({});
-  const [flagsOpen, setFlagsOpen] = useState(false);
+  const [flagsOpen, setFlagsOpen] = useState(true);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    addresses: true, services: true, links: true, vendors: true
+  });
+  const [openDepts, setOpenDepts] = useState<Record<string, boolean>>({});
   const [flagOn, setFlagOn] = useState(false);
   const [coreOn, setCoreOn] = useState(false);
   const [personOn, setPersonOn] = useState(false);
@@ -189,7 +193,17 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   };
 
   useEffect(() => { load(); }, [id]);
-  useEffect(() => { setFlagsOpen(id ? readFlagsOpen(id) : false); }, [id]);
+  useEffect(() => {
+    if (!id) return;
+    setFlagsOpen(readFlagsOpen(id));
+    setOpenSections({
+      addresses: readSectionOpen(id, "addresses", true),
+      services: readSectionOpen(id, "services", true),
+      links: readSectionOpen(id, "links", true),
+      vendors: readSectionOpen(id, "vendors", true)
+    });
+    setOpenDepts({});
+  }, [id]);
   useEffect(() => { api<Lookups>("/api/lookups").then(l => {
     setLookups(l);
     if (l.flagLevels[0]) setFlag(f => ({ ...f, levelId: f.levelId || l.flagLevels[0].id }));
@@ -222,6 +236,19 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
     setFlagsOpen(open);
     if (id) writeFlagsOpen(id, open);
   };
+  const persistSection = (name: string, open: boolean) => {
+    setOpenSections(s => ({ ...s, [name]: open }));
+    if (id) writeSectionOpen(id, name, open);
+  };
+  const isDeptOpen = (name: string) => {
+    if (Object.prototype.hasOwnProperty.call(openDepts, name)) return openDepts[name];
+    return id ? readDeptOpen(id, name, true) : true;
+  };
+  const persistDept = (name: string, open: boolean) => {
+    setOpenDepts(s => ({ ...s, [name]: open }));
+    if (id) writeDeptOpen(id, name, open);
+  };
+  const titleChoices = personTitleOptions(lookups, person.title);
   const vaultDepts = unique(file.vault.map(v => v.department || "Vault"));
 
   const reveal = async (credId: string) => {
@@ -505,33 +532,42 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
                 {map && <a href={map} target="_blank" rel="noopener">Map</a>}
                 {website && <a href={website} target="_blank" rel="noopener">Website</a>}
               </nav>
-              {flagSummary && (
-                <button type="button" className="client-file-flag-summary" onClick={() => persistFlagsOpen(!flagsOpen)} aria-expanded={flagsOpen}>
-                  {flagSummary}
-                </button>
-              )}
-              {flagsOpen && file.flags.length > 0 && (
-                <div className="client-file-flags">
-                  {file.flags.map(f => (
-                    <div className={"flag " + chipColor(f.color, f.level)} key={f.id}>
-                      <b>{f.level || "Flag"} · {f.on}</b>
-                      {f.body}
-                      <div className="muted" style={{ marginTop: 6 }}>{chiWhen(f.createdAt)}{f.createdBy ? " · " + f.createdBy : ""}</div>
-                      <button className="btn s" style={{ marginTop: 6 }} onClick={() => archiveFlag(f.id)}>Archive</button>
-                    </div>
-                  ))}
-                </div>
-              )}
               <p className="client-file-updated muted">
                 {file.updatedAt ? `Updated ${chiAgo(file.updatedAt)}` : "Client file"}
               </p>
+              <div className="client-file-actions">
+                <button className="btn" onClick={() => setFlagOn(v => !v)}>+ Flag</button>
+                <Link className="btn" to={`/clients/${file.id}/print`}>Print sheet</Link>
+              </div>
             </div>
           </div>
-          <div className="client-file-tools">
-            <button className="btn" onClick={() => setFlagOn(v => !v)}>+ Flag</button>
-            <Link className="btn" to={`/clients/${file.id}/print`}>Print sheet</Link>
-          </div>
         </div>
+        {file.flags.length > 0 && (
+          <div className="client-file-flag-block">
+            <div className="client-file-flag-bar">
+              <button type="button" className="client-file-flag-summary" onClick={() => persistFlagsOpen(!flagsOpen)} aria-expanded={flagsOpen}>
+                {flagSummary}
+              </button>
+              {flagsOpen && (
+                <button type="button" className="client-file-flag-collapse" onClick={() => persistFlagsOpen(false)}>
+                  Collapse all
+                </button>
+              )}
+            </div>
+            {flagsOpen && (
+              <div className="client-file-flags">
+                {file.flags.map(f => (
+                  <div className={"flag " + chipColor(f.color, f.level)} key={f.id}>
+                    <b>{f.level || "Flag"} · {f.on}</b>
+                    <p className="flag-body">{f.body}</p>
+                    <div className="muted" style={{ marginTop: 6 }}>{chiWhen(f.createdAt)}{f.createdBy ? " · " + f.createdBy : ""}</div>
+                    <button className="btn s" style={{ marginTop: 6 }} onClick={() => archiveFlag(f.id)}>Archive</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {coreOn && (
           <div className="card mod" style={{ marginBottom: 14 }}>
@@ -582,7 +618,12 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
               {(personOn || editingPersonId) && (
                 <div className="form-grid" style={{ marginBottom: 12 }}>
                   <input className="sel" placeholder="Name" value={person.name} onChange={e => setPerson({ ...person, name: e.target.value })} />
-                  <input className="sel" placeholder="Title" value={person.title} onChange={e => setPerson({ ...person, title: e.target.value })} />
+                  <select className="sel" value={person.title} onChange={e => setPerson({ ...person, title: e.target.value })} aria-label="Title">
+                    <option value="">Title</option>
+                    {titleChoices.map(t => (
+                      <option key={t.id} value={t.name}>{t.name}{t.retired ? " (retired)" : ""}</option>
+                    ))}
+                  </select>
                   <input className="sel" placeholder="Department" value={person.department} onChange={e => setPerson({ ...person, department: e.target.value })} />
                   <input className="sel" placeholder="Email" value={person.email} onChange={e => setPerson({ ...person, email: e.target.value })} />
                   <input className="sel" placeholder="Phone" value={person.phone} onChange={e => setPerson({ ...person, phone: e.target.value })} />
@@ -593,26 +634,26 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
                 </div>
               )}
               {pinned.length > 0 && (
-                <div className="dept"><div className="dept-h">Pinned</div>
-                  {pinned.map(p => <PersonRow key={"pin-" + p.id} p={p} care={careOn.has(p.name)} onPin={togglePin} onEdit={startEditPerson} />)}
+                <div className="dept">
+                  <FoldHead label="Pinned" open={isDeptOpen("Pinned")} onToggle={() => persistDept("Pinned", !isDeptOpen("Pinned"))} />
+                  {isDeptOpen("Pinned") && pinned.map(p => <PersonRow key={"pin-" + p.id} p={p} care={careOn.has(p.name)} onPin={togglePin} onEdit={startEditPerson} />)}
                 </div>
               )}
               {depts.map(d => (
                 <div className="dept" key={d}>
-                  <div className="dept-h">{d}</div>
-                  {unpinned.filter(p => (p.department || "People") === d).map(p => (
+                  <FoldHead label={d} open={isDeptOpen(d)} onToggle={() => persistDept(d, !isDeptOpen(d))} />
+                  {isDeptOpen(d) && unpinned.filter(p => (p.department || "People") === d).map(p => (
                     <PersonRow key={p.id} p={p} care={careOn.has(p.name)} onPin={togglePin} onEdit={startEditPerson} />
                   ))}
                 </div>
               ))}
               {file.people.length === 0 && <p className="muted">No people on this file yet.</p>}
             </div>
-            <div className="card mod">
-              <div className="mod-h"><h2>Addresses</h2><button className="btn s" onClick={() => {
-                setEditingAddrId(null);
-                setAddr({ label: "", line1: "", city: "", state: "TX", zip: "", county: "", hours: "", isPrimary: false, phone: "" });
-                setAddrOn(v => !v);
-              }}>+ Add</button></div>
+            <FileSection title="Addresses" open={openSections.addresses !== false} onToggle={() => persistSection("addresses", openSections.addresses === false)} onAdd={() => {
+              setEditingAddrId(null);
+              setAddr({ label: "", line1: "", city: "", state: "TX", zip: "", county: "", hours: "", isPrimary: false, phone: "" });
+              setAddrOn(v => !v);
+            }}>
               {(addrOn || editingAddrId) && (
                 <div className="form-grid" style={{ marginBottom: 12 }}>
                   <input className="sel" placeholder="Label (Studio)" value={addr.label} onChange={e => setAddr({ ...addr, label: e.target.value })} />
@@ -647,86 +688,90 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
                 </div>
               ))}
               {file.addresses.length === 0 && <p className="muted">No addresses yet.</p>}
-            </div>
+            </FileSection>
           </div>
-          <div className="card mod client-file-side">
-            <div className="mod-h"><h2>Services</h2><button className="btn s" onClick={() => {
+          <div className="client-file-side">
+            <FileSection title="Services" open={openSections.services !== false} onToggle={() => persistSection("services", openSections.services === false)} onAdd={() => {
               setEditingSvcId(null);
               setSvc({ serviceTypeId: lookups?.services[0]?.id || "", on: true, note: "" });
               setSvcOn(v => !v);
-            }}>+ Add</button></div>
-            <p className="muted" style={{ marginBottom: 8 }}>What they pay BIS for.</p>
-            {(svcOn || editingSvcId) && (
-              <div className="form-grid" style={{ marginBottom: 12 }}>
-                <select className="sel" value={svc.serviceTypeId} onChange={e => setSvc({ ...svc, serviceTypeId: e.target.value })}>
-                  {(lookups?.services || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-                <input className="sel" placeholder="Note" value={svc.note} onChange={e => setSvc({ ...svc, note: e.target.value })} />
-                <label className="muted"><input type="checkbox" checked={svc.on} onChange={e => setSvc({ ...svc, on: e.target.checked })} /> On</label>
-                <button className="btn p" onClick={saveSvc}>{editingSvcId ? "Save service" : "Add service"}</button>
-                {editingSvcId && <button className="btn s" onClick={() => { setEditingSvcId(null); setSvcOn(false); }}>Cancel</button>}
-              </div>
-            )}
-            {[...file.services].sort((a, b) => (a.on === b.on ? (a.name || "").localeCompare(b.name || "") : a.on ? -1 : 1)).map(s => (
-              <div className="row" key={s.id}>
-                <div><strong>{s.name || "Service"}</strong>{s.note && <div className="muted">{s.note}</div>}</div>
-                <div className="row-actions">
-                  <span className={"chip" + (s.on ? " on" : "")}>{s.on ? "On" : "Off"}</span>
-                  <button type="button" className="client-file-pin" onClick={() => startEditSvc(s)}>Edit</button>
-                  <button type="button" className="client-file-pin" onClick={() => removeSvc(s.id)}>Remove</button>
+            }}>
+              <p className="muted" style={{ marginBottom: 8 }}>What they pay BIS for.</p>
+              {(svcOn || editingSvcId) && (
+                <div className="form-grid" style={{ marginBottom: 12 }}>
+                  <select className="sel" value={svc.serviceTypeId} onChange={e => setSvc({ ...svc, serviceTypeId: e.target.value })}>
+                    {(lookups?.services || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <input className="sel" placeholder="Note" value={svc.note} onChange={e => setSvc({ ...svc, note: e.target.value })} />
+                  <label className="muted"><input type="checkbox" checked={svc.on} onChange={e => setSvc({ ...svc, on: e.target.checked })} /> On</label>
+                  <button className="btn p" onClick={saveSvc}>{editingSvcId ? "Save service" : "Add service"}</button>
+                  {editingSvcId && <button className="btn s" onClick={() => { setEditingSvcId(null); setSvcOn(false); }}>Cancel</button>}
                 </div>
-              </div>
-            ))}
-            {file.services.length === 0 && <p className="muted">No services on file.</p>}
-            <div className="mod-h" style={{ marginTop: 18 }}><h2>Links</h2><button className="btn s" onClick={() => {
+              )}
+              {[...file.services].sort((a, b) => (a.on === b.on ? (a.name || "").localeCompare(b.name || "") : a.on ? -1 : 1)).map(s => (
+                <div className="row" key={s.id}>
+                  <div><strong>{s.name || "Service"}</strong>{s.note && <div className="muted">{s.note}</div>}</div>
+                  <div className="row-actions">
+                    <span className={"chip" + (s.on ? " on" : "")}>{s.on ? "On" : "Off"}</span>
+                    <button type="button" className="client-file-pin" onClick={() => startEditSvc(s)}>Edit</button>
+                    <button type="button" className="client-file-pin" onClick={() => removeSvc(s.id)}>Remove</button>
+                  </div>
+                </div>
+              ))}
+              {file.services.length === 0 && <p className="muted">No services on file.</p>}
+            </FileSection>
+            <FileSection title="Links" open={openSections.links !== false} onToggle={() => persistSection("links", openSections.links === false)} onAdd={() => {
               setEditingLinkId(null);
               setLink({ label: "", url: "" });
               setLinkOn(v => !v);
-            }}>+ Add</button></div>
-            {(linkOn || editingLinkId) && (
-              <div className="form-grid" style={{ marginBottom: 12 }}>
-                <input className="sel" placeholder="Label" value={link.label} onChange={e => setLink({ ...link, label: e.target.value })} />
-                <input className="sel" placeholder="URL" value={link.url} onChange={e => setLink({ ...link, url: e.target.value })} />
-                <button className="btn p" onClick={saveLink}>{editingLinkId ? "Save link" : "Add link"}</button>
-                {editingLinkId && <button className="btn s" onClick={() => { setEditingLinkId(null); setLinkOn(false); setLink({ label: "", url: "" }); }}>Cancel</button>}
-              </div>
-            )}
-            {file.links.map(l => (
-              <div className="row" key={l.id}>
-                <a className="biglink" href={l.url} target="_blank" rel="noopener">{l.label}<small>{host(l.url)}</small></a>
-                <div className="row-actions">
-                  <button type="button" className="client-file-pin" onClick={() => startEditLink(l)}>Edit</button>
-                  <button type="button" className="client-file-pin" onClick={() => removeLink(l.id)}>Remove</button>
+            }}>
+              {(linkOn || editingLinkId) && (
+                <div className="form-grid" style={{ marginBottom: 12 }}>
+                  <input className="sel" placeholder="Label" value={link.label} onChange={e => setLink({ ...link, label: e.target.value })} />
+                  <input className="sel" placeholder="URL" value={link.url} onChange={e => setLink({ ...link, url: e.target.value })} />
+                  <button className="btn p" onClick={saveLink}>{editingLinkId ? "Save link" : "Add link"}</button>
+                  {editingLinkId && <button className="btn s" onClick={() => { setEditingLinkId(null); setLinkOn(false); setLink({ label: "", url: "" }); }}>Cancel</button>}
                 </div>
-              </div>
-            ))}
-            {file.links.length === 0 && website && (
-              <a className="biglink" href={website} target="_blank" rel="noopener">Website<small>{host(website)}</small></a>
-            )}
-            <div className="mod-h" style={{ marginTop: 18 }}><h2>Vendors</h2><button className="btn s" onClick={() => {
+              )}
+              {file.links.map(l => (
+                <div className="row" key={l.id}>
+                  <a className="biglink" href={l.url} target="_blank" rel="noopener">{l.label}<small>{host(l.url)}</small></a>
+                  <div className="row-actions">
+                    <button type="button" className="client-file-pin" onClick={() => startEditLink(l)}>Edit</button>
+                    <button type="button" className="client-file-pin" onClick={() => removeLink(l.id)}>Remove</button>
+                  </div>
+                </div>
+              ))}
+              {file.links.length === 0 && website && (
+                <a className="biglink" href={website} target="_blank" rel="noopener">Website<small>{host(website)}</small></a>
+              )}
+              {file.links.length === 0 && !website && <p className="muted">No links yet.</p>}
+            </FileSection>
+            <FileSection title="Vendors" open={openSections.vendors !== false} onToggle={() => persistSection("vendors", openSections.vendors === false)} onAdd={() => {
               setEditingVendorId(null);
               setVendor({ kind: "", name: "", phone: "" });
               setVendorOn(v => !v);
-            }}>+ Add</button></div>
-            {(vendorOn || editingVendorId) && (
-              <div className="form-grid" style={{ marginBottom: 12 }}>
-                <input className="sel" placeholder="Kind (Internet)" value={vendor.kind} onChange={e => setVendor({ ...vendor, kind: e.target.value })} />
-                <input className="sel" placeholder="Name" value={vendor.name} onChange={e => setVendor({ ...vendor, name: e.target.value })} />
-                <input className="sel" placeholder="Phone" value={vendor.phone} onChange={e => setVendor({ ...vendor, phone: e.target.value })} />
-                <button className="btn p" onClick={saveVendor}>{editingVendorId ? "Save vendor" : "Add vendor"}</button>
-                {editingVendorId && <button className="btn s" onClick={() => { setEditingVendorId(null); setVendorOn(false); setVendor({ kind: "", name: "", phone: "" }); }}>Cancel</button>}
-              </div>
-            )}
-            {file.vendors.map(v => (
-              <div className="row" key={v.id}>
-                <div><strong>{v.kind}</strong><div className="muted">{v.name}{v.phone ? " · " + v.phone : ""}</div></div>
-                <div className="row-actions">
-                  <button type="button" className="client-file-pin" onClick={() => startEditVendor(v)}>Edit</button>
-                  <button type="button" className="client-file-pin" onClick={() => removeVendor(v.id)}>Remove</button>
+            }}>
+              {(vendorOn || editingVendorId) && (
+                <div className="form-grid" style={{ marginBottom: 12 }}>
+                  <input className="sel" placeholder="Kind (Internet)" value={vendor.kind} onChange={e => setVendor({ ...vendor, kind: e.target.value })} />
+                  <input className="sel" placeholder="Name" value={vendor.name} onChange={e => setVendor({ ...vendor, name: e.target.value })} />
+                  <input className="sel" placeholder="Phone" value={vendor.phone} onChange={e => setVendor({ ...vendor, phone: e.target.value })} />
+                  <button className="btn p" onClick={saveVendor}>{editingVendorId ? "Save vendor" : "Add vendor"}</button>
+                  {editingVendorId && <button className="btn s" onClick={() => { setEditingVendorId(null); setVendorOn(false); setVendor({ kind: "", name: "", phone: "" }); }}>Cancel</button>}
                 </div>
-              </div>
-            ))}
-            {file.vendors.length === 0 && <p className="muted">No vendors listed.</p>}
+              )}
+              {file.vendors.map(v => (
+                <div className="row" key={v.id}>
+                  <div><strong>{v.kind}</strong><div className="muted">{v.name}{v.phone ? " · " + v.phone : ""}</div></div>
+                  <div className="row-actions">
+                    <button type="button" className="client-file-pin" onClick={() => startEditVendor(v)}>Edit</button>
+                    <button type="button" className="client-file-pin" onClick={() => removeVendor(v.id)}>Remove</button>
+                  </div>
+                </div>
+              ))}
+              {file.vendors.length === 0 && <p className="muted">No vendors listed.</p>}
+            </FileSection>
           </div>
         </div>
 
@@ -870,12 +915,14 @@ function PersonRow({ p, care, onPin, onEdit }: { p: ClientFileData["people"][num
       <div className="who">
         <div className="av" style={{ background: p.avatarColor || "#1c332c" }}>{p.initials || initials(p.name)}</div>
         <div>
-          <strong>{p.name}</strong>
-          {p.primary && <span className="chip on">Primary</span>}
-          {p.pinned && !p.primary && <span className="chip on">Pinned</span>}
-          {care && <span className="pflag">Care</span>}
-          {p.title && <div className="muted">{p.title}</div>}
-          <div>
+          <div className="person-line">
+            <strong>{p.name}</strong>
+            {p.title && <span className="muted person-title">{p.title}</span>}
+            {p.primary && <span className="chip on">Primary</span>}
+            {p.pinned && !p.primary && <span className="chip on">Pinned</span>}
+            {care && <span className="pflag">Care</span>}
+          </div>
+          <div className="person-contact">
             {p.email && <a href={"mailto:" + p.email}>{p.email}</a>}
             {p.email && p.phone ? " · " : ""}
             {p.phone && <a href={telHref(p.phone)}>{p.phone}</a>}
@@ -899,6 +946,40 @@ function PinIcon() {
       <circle cx="12" cy="10" r="2.3" />
     </svg>
   );
+}
+
+function FileSection({ title, open, onToggle, onAdd, children }: {
+  title: string; open: boolean; onToggle: () => void; onAdd: () => void; children: ReactNode;
+}) {
+  return (
+    <div className="card mod">
+      <div className="mod-h">
+        <FoldHead label={title} open={open} onToggle={onToggle} heading />
+        <button className="btn s" onClick={onAdd}>+ Add</button>
+      </div>
+      {open && children}
+    </div>
+  );
+}
+
+function FoldHead({ label, open, onToggle, heading }: { label: string; open: boolean; onToggle: () => void; heading?: boolean }) {
+  return (
+    <button type="button" className={"file-fold" + (heading ? " file-fold-h" : "")} onClick={onToggle} aria-expanded={open}>
+      <span className="file-fold-caret" aria-hidden>{open ? "▾" : "▸"}</span>
+      {heading ? <h2>{label}</h2> : <span className="dept-h">{label}</span>}
+    </button>
+  );
+}
+
+function personTitleOptions(lookups: Lookups | null, current?: string) {
+  const titles = lookups?.titles || [];
+  const active = titles.filter(t => !t.retired);
+  const cur = (current || "").trim();
+  if (cur && !active.some(t => t.name === cur)) {
+    const retired = titles.find(t => t.retired && t.name === cur);
+    return retired ? [...active, retired] : [...active, { id: "current", name: cur, retired: true }];
+  }
+  return active;
 }
 
 function unique(xs: string[]) {
@@ -928,7 +1009,41 @@ function readFlagsOpen(id: string) {
     if (v === "1") return true;
     if (v === "0") return false;
   } catch { /* private mode */ }
-  return false;
+  return true;
+}
+
+function sectionOpenKey(id: string, section: string) {
+  return "bis.admin.clientFile.sectionOpen." + id + "." + section;
+}
+
+function readSectionOpen(id: string, section: string, fallback: boolean) {
+  try {
+    const v = sessionStorage.getItem(sectionOpenKey(id, section));
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch { /* private mode */ }
+  return fallback;
+}
+
+function writeSectionOpen(id: string, section: string, open: boolean) {
+  try { sessionStorage.setItem(sectionOpenKey(id, section), open ? "1" : "0"); } catch { /* private mode */ }
+}
+
+function deptOpenKey(id: string, dept: string) {
+  return "bis.admin.clientFile.deptOpen." + id + "." + dept;
+}
+
+function readDeptOpen(id: string, dept: string, fallback: boolean) {
+  try {
+    const v = sessionStorage.getItem(deptOpenKey(id, dept));
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch { /* private mode */ }
+  return fallback;
+}
+
+function writeDeptOpen(id: string, dept: string, open: boolean) {
+  try { sessionStorage.setItem(deptOpenKey(id, dept), open ? "1" : "0"); } catch { /* private mode */ }
 }
 
 function writeFlagsOpen(id: string, open: boolean) {

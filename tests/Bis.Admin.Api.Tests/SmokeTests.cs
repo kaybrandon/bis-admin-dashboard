@@ -116,6 +116,7 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("/api/clients/{id}/links", json);
         Assert.Contains("/api/clients/{id}/vendors", json);
         Assert.Contains("/api/admin/services", json);
+        Assert.Contains("/api/admin/titles", json);
         Assert.Contains("/api/flags", json);
         Assert.Contains("/api/settings", json);
         Assert.Contains("HomeBoardDto", json);
@@ -469,6 +470,89 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
             clipboardClearSeconds = 30
         });
         restore.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Admin_manages_person_titles_staff_picks_catalog_only()
+    {
+        var client = _factory.CreateClient();
+        var murray = Guid.Parse("66666666-6666-6666-6666-666666666601");
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var lookups = await client.GetFromJsonAsync<JsonElement>("/api/lookups");
+        Assert.Contains(lookups.GetProperty("titles").EnumerateArray(), t => t.GetProperty("name").GetString() == "Owner" && !t.GetProperty("retired").GetBoolean());
+        Assert.Contains(lookups.GetProperty("titles").EnumerateArray(), t => t.GetProperty("name").GetString() == "Designer");
+
+        var list = await client.GetFromJsonAsync<JsonElement>("/api/admin/titles");
+        Assert.Contains(list.EnumerateArray(), t => t.GetProperty("name").GetString() == "Studio IT");
+
+        var addName = "P7 Title " + Guid.NewGuid().ToString("N")[..6];
+        var added = await client.PostAsJsonAsync("/api/admin/titles", new { name = addName });
+        added.EnsureSuccessStatusCode();
+        var addedJson = await added.Content.ReadFromJsonAsync<JsonElement>();
+        var titleId = addedJson.GetProperty("id").GetString();
+        Assert.Equal(addName, addedJson.GetProperty("name").GetString());
+
+        var rename = addName + " edited";
+        var edit = await client.PutAsJsonAsync($"/api/admin/titles/{titleId}", new { name = rename });
+        edit.EnsureSuccessStatusCode();
+
+        var person = await client.PostAsJsonAsync($"/api/clients/{murray}/people", new
+        {
+            name = "P7 Density",
+            title = rename,
+            department = "Operations",
+            email = "p7@murraymedia.example",
+            phone = "(940) 555-0199",
+            pinned = false,
+            primary = false
+        });
+        person.EnsureSuccessStatusCode();
+        var personId = (await person.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+
+        var bad = await client.PostAsJsonAsync($"/api/clients/{murray}/people", new
+        {
+            name = "Free Text",
+            title = "Not a catalog title",
+            department = "Operations",
+            pinned = false,
+            primary = false
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+
+        var retire = await client.PostAsync($"/api/admin/titles/{titleId}/retire", null);
+        retire.EnsureSuccessStatusCode();
+        Assert.True((await retire.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("retired").GetBoolean());
+
+        var keepRetired = await client.PutAsJsonAsync($"/api/clients/{murray}/people/{personId}", new
+        {
+            name = "P7 Density",
+            title = rename,
+            department = "Operations",
+            email = "p7@murraymedia.example",
+            phone = "(940) 555-0199",
+            pinned = false,
+            primary = false
+        });
+        keepRetired.EnsureSuccessStatusCode();
+
+        var newRetired = await client.PostAsJsonAsync($"/api/clients/{murray}/people", new
+        {
+            name = "Cannot use retired",
+            title = rename,
+            department = "Operations",
+            pinned = false,
+            primary = false
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, newRetired.StatusCode);
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+        var blocked = await client.PostAsJsonAsync("/api/admin/titles", new { name = "Maya should not add" });
+        Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
+        var staffLookups = await client.GetFromJsonAsync<JsonElement>("/api/lookups");
+        Assert.Contains(staffLookups.GetProperty("titles").EnumerateArray(), t => t.GetProperty("name").GetString() == "Owner");
     }
 
     private static async Task<JsonElement> Login(HttpClient client, string email)

@@ -206,27 +206,44 @@ body[data-role="staff"] .admin-only{display:none!important}
 /* Client file SoT — scoped so Home chrome / week-board PRs merge cleanly */
 .client-file{max-width:none}
 .client-file-shell{width:100%}
-.client-file-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
-.client-file-id{display:flex;gap:14px;align-items:flex-start;min-width:0}
-.client-file-id-body{min-width:0}
-.client-file-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.client-file-title h1{font-size:24px;letter-spacing:-.03em;line-height:1.1;font-weight:700;margin:0}
-.client-file-id-body h1{font-size:24px;letter-spacing:-.03em;line-height:1.1;font-weight:700}
+.client-file-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+.client-file-id{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.client-file-id-body{min-width:0;width:max-content;max-width:100%}
+.client-file-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.client-file-title h1{font-size:20px;letter-spacing:-.03em;line-height:1.15;font-weight:700;margin:0}
+.client-file-id-body h1{font-size:20px;letter-spacing:-.03em;line-height:1.15;font-weight:700}
 .row-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
 .client-file .biglink{flex:1;min-width:0;border-top:0;padding:0}
-.client-file .mark{width:40px;height:40px;border-radius:10px}
-.client-file .meta{margin-top:8px}
-.client-file-tools{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;flex-shrink:0}
-.client-file-biz{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 6px;font-size:13.5px;font-weight:600}
+.client-file .mark{width:36px;height:36px;border-radius:9px;font-size:13px}
+.client-file .meta{margin-top:6px}
+.client-file-actions{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0 0;width:100%}
+.client-file-actions .btn{text-transform:none;letter-spacing:0}
+.client-file-biz{display:flex;gap:16px;flex-wrap:wrap;margin:6px 0 4px;font-size:13.5px;font-weight:600}
 .client-file-biz a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
-.client-file-flag-summary{border:0;background:transparent;padding:0;margin:2px 0 0;color:var(--ink);font:inherit;font-size:13.5px;font-weight:600;text-align:left;cursor:pointer}
+.client-file-flag-block{margin:0 0 12px}
+.client-file-flag-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.client-file-flag-summary{border:0;background:transparent;padding:0;margin:0;color:var(--ink);font:inherit;font-size:13.5px;font-weight:600;text-align:left;cursor:pointer}
 .client-file-flag-summary:hover{text-decoration:underline}
+.client-file-flag-collapse{border:0;background:transparent;padding:0;color:var(--muted);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+.client-file-flag-collapse:hover{color:var(--accent);text-decoration:underline}
 .client-file-flags{margin-top:8px;display:flex;flex-direction:column;gap:6px;max-width:720px}
-.client-file-updated{margin:6px 0 0}
+.client-file-flags .flag-body{margin:4px 0 0;font-size:13.5px;line-height:1.45;white-space:pre-wrap}
+.client-file-updated{margin:4px 0 0}
 .client-file-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px;margin-bottom:14px;align-items:start}
-.client-file-pin{border:0;background:transparent;color:var(--muted);min-height:32px;padding:4px 6px;font-size:12px;font-weight:600;flex-shrink:0}
+.client-file-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.client-file-pin{border:0;background:transparent;color:var(--muted);min-height:28px;padding:2px 6px;font-size:12px;font-weight:600;flex-shrink:0}
 .client-file-pin:hover{color:var(--accent)}
-.client-file .contact{align-items:center}
+.client-file .contact{align-items:center;padding:5px 0}
+.client-file .dept{margin-top:6px}
+.client-file .dept-h{padding:2px 0}
+.client-file .av{width:26px;height:26px;font-size:10px}
+.client-file .who{gap:8px;align-items:center}
+.person-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;line-height:1.25}
+.person-title{font-size:12px}
+.person-contact{font-size:12.5px;line-height:1.3}
+.file-fold{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:0;color:inherit;font:inherit;cursor:pointer;min-height:24px;text-align:left}
+.file-fold-h h2{margin:0}
+.file-fold-caret{color:var(--muted);font-size:12px;width:12px;line-height:1}
 .client-file-stick{display:none}
 @media(max-width:900px){
   .client-file-grid{grid-template-columns:1fr}

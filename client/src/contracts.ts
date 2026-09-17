@@ -116,11 +116,14 @@ export type FlagRow = {
   createdBy?: string;
 };
 
+export type PersonTitle = { id: string; name: string; retired: boolean };
+
 export type Lookups = {
   departments: { id: string; name: string }[];
   counties: string[];
   services: { id: string; name?: string; description?: string }[];
   flagLevels: { id: string; name: string; color?: string; description?: string }[];
+  titles?: PersonTitle[];
   customFields?: { id: string; name: string; type?: string }[];
   product?: string;
 };
@@ -148,6 +151,7 @@ export const HomeClientsFlagsApi = {
   removeVendor: "DELETE /api/clients/{id}/vendors/{vendorId}",
   addNote: "POST /api/clients/{id}/notes  { body }  (@Name creates a mention)",
   addCatalogService: "POST /api/admin/services  { name, description? }  Admin only",
+  titles: "GET /api/admin/titles · POST/PUT /api/admin/titles[/{id}] · POST /api/admin/titles/{id}/retire  Admin only",
   vaultList: "GET /api/clients/{id}/vault  (masked)",
   vaultAdd: "POST /api/clients/{id}/vault  { department, title, username?, secret, url?, note? }",
   vaultReveal: "POST /api/clients/{id}/vault/{credId}/reveal  → { secret }  (human staff only)",
@@ -156,7 +160,7 @@ export const HomeClientsFlagsApi = {
   addFlag: "POST /api/flags  { clientId, levelId, body, personId? }",
   archiveFlag: "POST /api/flags/{id}/archive  → purgeAt = now+90d",
   restoreFlag: "POST /api/flags/{id}/restore",
-  lookups: "GET /api/lookups  → counties, flagLevels, services, departments",
+  lookups: "GET /api/lookups  → counties, flagLevels, services, departments, titles",
 } as const;
 
 export const MURRAY_MEDIA_ID = "66666666-6666-6666-6666-666666666601";

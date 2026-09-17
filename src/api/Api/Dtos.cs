@@ -24,6 +24,8 @@ public record ClientLinkWriteRequest(string Label, string Url);
 public record ClientVendorWriteRequest(string Kind, string Name, string? Phone);
 public record VaultWriteRequest(string Department, string Title, string? Username, string Secret, string? Url, string? Note);
 public record NamedRequest(string Name, string? Description, string? Color);
+public record TitleWriteRequest(string? Name, bool? Retired);
+public record PersonTitleDto(Guid Id, string Name, bool Retired);
 public record TokenCreateRequest(string Name, string? Contact, bool Internal);
 public record RevertRequest(string? Reason);
 public record SettingWriteRequest(string? CompanyName, bool? ShowPresence, int? IdleMinutes, bool? GeofenceOffice, int? ClipboardClearSeconds);
@@ -52,6 +54,7 @@ public record ClientFileDto(Guid Id, string Name, string? Industry, string Statu
 
 public record FlagRowDto(Guid Id, string Body, DateTime CreatedAt, DateTime? ArchivedAt, DateTime? PurgeAt, int? DaysLeft, string? Level, string? Color, string On, Guid ClientId, string? Client, Guid CreatedById, string? CreatedBy);
 public record CreatedIdDto(Guid Id);
+public record TitleCreatedDto(Guid Id, string Name, bool Retired);
 
 public static class Maps
 {

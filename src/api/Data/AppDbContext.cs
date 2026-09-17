@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<Person> People => Set<Person>();
     public DbSet<Address> Addresses => Set<Address>();
     public DbSet<ServiceType> ServiceTypes => Set<ServiceType>();
+    public DbSet<PersonTitle> PersonTitles => Set<PersonTitle>();
     public DbSet<ClientService> ClientServices => Set<ClientService>();
     public DbSet<Link> Links => Set<Link>();
     public DbSet<Vendor> Vendors => Set<Vendor>();
@@ -53,6 +54,10 @@ public class AppDbContext : DbContext
             e.HasMany(x => x.Flags).WithOne(x => x.Client).HasForeignKey(x => x.ClientId);
             e.HasMany(x => x.Attachments).WithOne(x => x.Client).HasForeignKey(x => x.ClientId);
             e.HasMany(x => x.Notes).WithOne(x => x.Client).HasForeignKey(x => x.ClientId);
+        });
+        model.Entity<PersonTitle>(e =>
+        {
+            e.HasIndex(x => x.Name).IsUnique();
         });
         model.Entity<Credential>(e =>
         {

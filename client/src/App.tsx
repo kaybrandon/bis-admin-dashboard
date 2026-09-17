@@ -831,8 +831,79 @@ function Settings({ admin, workspace, setWorkspace, toast }: {
         {admin && <div className="card mod"><div className="mod-h"><h2>Geofence</h2></div>
           <div className="set-row"><div><strong>Never auto Home</strong><div className="muted">Home is a tap, not a fence.</div></div><div className="toggle on"><i /></div></div>
         </div>}
+        {admin && <TitlesAdmin toast={toast} />}
       </div>
     </section>
+  );
+}
+
+function TitlesAdmin({ toast }: { toast: ToastFn }) {
+  const [titles, setTitles] = useState<{ id: string; name: string; retired: boolean }[]>([]);
+  const [name, setName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const load = () => api<{ id: string; name: string; retired: boolean }[]>("/api/admin/titles").then(setTitles).catch(e => toast((e as Error).message));
+  useEffect(() => { load(); }, []);
+  const add = async () => {
+    if (!name.trim()) { toast("Name the title"); return; }
+    try {
+      await api("/api/admin/titles", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
+      toast("Title added");
+      setName("");
+      await load();
+    } catch (e) { toast((e as Error).message); }
+  };
+  const saveEdit = async () => {
+    if (!editingId || !editName.trim()) { toast("Name the title"); return; }
+    try {
+      await api("/api/admin/titles/" + editingId, { method: "PUT", body: JSON.stringify({ name: editName.trim() }) });
+      toast("Title saved");
+      setEditingId(null);
+      setEditName("");
+      await load();
+    } catch (e) { toast((e as Error).message); }
+  };
+  const retire = async (id: string, retired: boolean) => {
+    try {
+      if (retired) await api("/api/admin/titles/" + id, { method: "PUT", body: JSON.stringify({ retired: false }) });
+      else await api("/api/admin/titles/" + id + "/retire", { method: "POST" });
+      toast(retired ? "Title restored" : "Title retired");
+      await load();
+    } catch (e) { toast((e as Error).message); }
+  };
+  return (
+    <div className="card mod span2">
+      <div className="mod-h"><h2>Titles</h2><span className="chip on">Admin only</span></div>
+      <p className="muted" style={{ marginBottom: 8 }}>Client-file person titles. Staff pick from this list — not free text. Retire hides a title from new people.</p>
+      <div className="form-grid" style={{ marginBottom: 12 }}>
+        <input className="sel" placeholder="New title" value={name} onChange={e => setName(e.target.value)} aria-label="New person title" />
+        <button className="btn p" type="button" onClick={add}>Add title</button>
+      </div>
+      {titles.map(t => (
+        <div className="row" key={t.id}>
+          <div>
+            {editingId === t.id
+              ? <input className="sel" value={editName} onChange={e => setEditName(e.target.value)} aria-label="Edit title name" />
+              : <strong>{t.name}</strong>}
+            {t.retired && <div className="muted">Retired</div>}
+          </div>
+          <div className="row-actions">
+            {editingId === t.id ? (
+              <>
+                <button type="button" className="btn s" onClick={saveEdit}>Save</button>
+                <button type="button" className="btn s" onClick={() => { setEditingId(null); setEditName(""); }}>Cancel</button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="client-file-pin" onClick={() => { setEditingId(t.id); setEditName(t.name); }}>Edit</button>
+                <button type="button" className="client-file-pin" onClick={() => retire(t.id, t.retired)}>{t.retired ? "Restore" : "Retire"}</button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+      {titles.length === 0 && <p className="muted">No titles yet.</p>}
+    </div>
   );
 }
 
