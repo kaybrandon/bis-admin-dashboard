@@ -161,9 +161,9 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
           <input className="search" placeholder="Search clients, people, addresses" value={q} onChange={e => setQ(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") nav("/clients?q=" + encodeURIComponent(q)); }} />
           <div className="who-chip">
-            <button className="photo-btn" onClick={() => nav("/me")} title="My profile"><div className="me">{user.initials}</div></button>
+            <button className="photo-btn" onClick={() => nav("/me")} title="My profile" aria-label="My profile"><div className="me">{user.initials}</div></button>
             <button onClick={() => nav("/me")} style={{ border: 0, background: "transparent", textAlign: "left", padding: 0 }}>
-              <div className="who-meta">{user.name}<span>View profile</span></div>
+              <div className="who-meta">{user.name}</div>
             </button>
             <button className="btn p" onClick={() => clocked ? clock() : setWhereOn(v => !v)}>{clocked ? "Clock out" : "Clock in"}</button>
             {clocked && <button className="btn s" onClick={() => setWhereOn(v => !v)}>{place || "Place"}</button>}
@@ -298,7 +298,7 @@ function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; 
         }}>Save</button>
       </div>
       <div className="modules">
-        <div className="card mod"><div className="mod-h"><h2>Photo</h2></div><div className="me" style={{ width: 72, height: 72, fontSize: 22, borderRadius: "50%", background: "#1c332c", color: "#d5eee4", display: "grid", placeItems: "center" }}>{user.initials}</div><p className="muted" style={{ marginTop: 22 }}>Initials until you upload</p></div>
+        <div className="card mod"><div className="me" style={{ width: 72, height: 72, fontSize: 22, borderRadius: "50%", background: "#1c332c", color: "#d5eee4", display: "grid", placeItems: "center" }}>{user.initials}</div><p className="muted" style={{ marginTop: 12 }}>Initials until you upload</p></div>
         <div className="card mod">
           <div className="mod-h"><h2>You</h2></div>
           <label className="muted">Name</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={name} onChange={e => setName(e.target.value)} />
