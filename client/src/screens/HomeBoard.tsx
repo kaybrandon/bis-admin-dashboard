@@ -38,6 +38,9 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
   const featuredUpdate = updates[0];
   const maxMentions = Math.max(1, ...board.mentions.map(m => m.count));
   const [first, second, third] = board.kudosTop;
+  const starTo = board.starOfDay
+    ? names[board.starOfDay.to || ""] || board.starOfDay.to || "teammate"
+    : "";
   const starFrom = board.starOfDay
     ? names[board.starOfDay.from] || (board.starOfDay.from.length > 20 ? "" : board.starOfDay.from)
     : "";
@@ -73,7 +76,7 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
       )}
 
       {postOn && admin && (
-        <div className="card mod" style={{ marginBottom: 14 }}>
+        <div className="card mod home-card" style={{ marginBottom: 14 }}>
           <div className="mod-h"><h2>New post</h2><span className="chip">Admin · this week</span></div>
           <div className="tools">
             <select className="sel" value={kind} onChange={e => setKind(e.target.value)}>
@@ -94,29 +97,29 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
         <div className="stat"><span>Open flags</span><b>{board.stats.openFlags}</b></div>
       </div>
 
-      <div className="modules">
-        {featuredWin && <FeaturedPost post={featuredWin} kind="win" toast={toast} onChange={load} />}
-        {featuredUpdate && <FeaturedPost post={featuredUpdate} kind="update" toast={toast} onChange={load} />}
-        {board.starOfDay && (
-          <div className="card mod" style={{ background: "#e7f4ec", borderColor: "#b7dcc8" }}>
-            <div className="mod-h"><h2>Star of the day</h2><span className="chip">This week</span></div>
-            <p><strong>@{firstName(board.starOfDay.to || "teammate")}</strong> — {board.starOfDay.body}</p>
-            <p className="muted" style={{ marginTop: 6 }}>{starFrom || "This week"}{starFrom ? " · this week" : ""}</p>
-          </div>
-        )}
-        <div className="card mod">
-          <div className="mod-h"><h2>Mentioned · this week</h2><Link className="btn s" to="/mentions">Inbox</Link></div>
-          {board.mentions.length === 0 && <p className="muted">No @mentions this week.</p>}
-          {board.mentions.map(m => (
-            <div className="bar-row" key={m.userId}>
-              <span>@{firstName(m.name)}</span>
-              <div className="bar"><i style={{ width: `${Math.round((m.count / maxMentions) * 100)}%` }} /></div>
-              <span>{m.count}</span>
-            </div>
-          ))}
-        </div>
-        <div className="card mod">
-          <div className="mod-h"><h2>Kudos · this week</h2><Link className="btn s" to="/kudos">All</Link></div>
+      <div className="home-grid">
+        <article className="card mod home-card home-win accent-win">
+          <FeaturedPost post={featuredWin} kind="win" toast={toast} onChange={load} />
+        </article>
+
+        <article className="card mod home-card home-update accent-update">
+          <FeaturedPost post={featuredUpdate} kind="update" toast={toast} onChange={load} />
+        </article>
+
+        <article className="card mod home-card home-star accent-star">
+          <div className="mod-h"><h2>Star of the day</h2><span className="chip">This week</span></div>
+          {board.starOfDay ? (
+            <>
+              <p><strong>@{firstName(starTo)}</strong> — {board.starOfDay.body}</p>
+              <p className="muted" style={{ marginTop: 6 }}>{starFrom || "This week"}{starFrom ? " · this week" : ""}</p>
+            </>
+          ) : (
+            <p className="muted">No star yet this week. One deed = one star.</p>
+          )}
+        </article>
+
+        <article className="card mod home-card home-kudos accent-kudos">
+          <div className="mod-h"><h2>Kudos</h2><Link className="btn s" to="/kudos">All</Link></div>
           {board.kudosTop.length === 0 && <p className="muted">No stars this week yet. One deed = one star.</p>}
           {board.kudosTop.length > 0 && (
             <div className="podium">
@@ -125,9 +128,22 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
               <PodiumSlot place={3} row={third} />
             </div>
           )}
-        </div>
-        <div className="card mod span2">
-          <div className="mod-h"><h2>Board · this week</h2><span className="muted">{board.tz}</span></div>
+        </article>
+
+        <article className="card mod home-card home-mentions accent-mentions">
+          <div className="mod-h"><h2>Mentions</h2><Link className="btn s" to="/mentions">Inbox</Link></div>
+          {board.mentions.length === 0 && <p className="muted">No @mentions this week.</p>}
+          {board.mentions.map(m => (
+            <div className="bar-row" key={m.userId}>
+              <span>@{firstName(m.name)}</span>
+              <div className="bar"><i style={{ width: `${Math.round((m.count / maxMentions) * 100)}%` }} /></div>
+              <span>{m.count}</span>
+            </div>
+          ))}
+        </article>
+
+        <article className="card mod home-card home-feed accent-board">
+          <div className="mod-h"><h2>Board</h2><span className="muted">{board.tz}</span></div>
           {board.posts.length === 0 && <p className="muted">Nothing on the week board yet.</p>}
           {board.posts.map(p => (
             <div className="row" key={p.id}>
@@ -138,16 +154,17 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
               <span className={"chip" + (p.kind === "win" ? " on" : "")}>{p.kind === "win" ? "Win" : "Update"}</span>
             </div>
           ))}
-        </div>
+        </article>
       </div>
     </section>
   );
 }
 
-function FeaturedPost({ post, kind, toast, onChange }: { post: HomePost; kind: "win" | "update"; toast: ToastFn; onChange: () => void }) {
+function FeaturedPost({ post, kind, toast, onChange }: { post?: HomePost; kind: "win" | "update"; toast: ToastFn; onChange: () => void }) {
   const [draft, setDraft] = useState("");
   const win = kind === "win";
   const comment = async () => {
+    if (!post) return;
     if (!draft.trim()) { toast("Write a comment"); return; }
     try {
       await api(`/api/posts/${post.id}/comments`, { method: "POST", body: JSON.stringify({ body: draft }) });
@@ -157,23 +174,28 @@ function FeaturedPost({ post, kind, toast, onChange }: { post: HomePost; kind: "
     } catch (e) { toast((e as Error).message); }
   };
   return (
-    <div className={"card mod " + (win ? "win-card span2" : "upd-card")}>
+    <>
       <div className="mod-h">
         <h2>{win ? "Win" : "Update"}</h2>
-        <span className={"chip" + (win ? " on" : "")}>{post.author || "Shop"}</span>
+        {post && <span className={"chip" + (win ? " on" : "")}>{post.author || "Shop"}</span>}
       </div>
-      {win ? <p className="hero">{post.title}</p> : <p><strong>{post.title}</strong></p>}
-      <p className="muted" style={{ margin: "6px 0 10px" }}>This week · {post.author || "Shop"} · {chiShort(post.createdAt)}</p>
-      <p className="note">{mention(post.body)}</p>
-      {post.comments.map(c => (
-        <div className="comment" key={c.id}><strong>{c.author || "Shop"}</strong> · {mention(c.body)}</div>
-      ))}
-      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-        <input className="sel" style={{ flex: 1, minWidth: 160 }} placeholder="Comment · @Name mentions count" value={draft} onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") comment(); }} />
-        <button className="btn s" onClick={comment}>Comment</button>
-      </div>
-    </div>
+      {!post && <p className="muted">{win ? "No win posted this week yet." : "No update this week."}</p>}
+      {post && (
+        <>
+          {win ? <p className="hero">{post.title}</p> : <p><strong>{post.title}</strong></p>}
+          <p className="muted" style={{ margin: "6px 0 10px" }}>This week · {post.author || "Shop"} · {chiShort(post.createdAt)}</p>
+          <p className="note">{mention(post.body)}</p>
+          {post.comments.map(c => (
+            <div className="comment" key={c.id}><strong>{c.author || "Shop"}</strong> · {mention(c.body)}</div>
+          ))}
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <input className="sel" style={{ flex: 1, minWidth: 160 }} placeholder="Comment · @Name mentions count" value={draft} onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") comment(); }} />
+            <button className="btn s" onClick={comment}>Comment</button>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
