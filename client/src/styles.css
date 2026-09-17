@@ -111,16 +111,11 @@ tr.go:hover td{background:#faf6ef}
 .toggle.on{background:var(--accent)}
 .toggle i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}
 .toggle.on i{left:19px}
-.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 14px}
-.act{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:64px;border:1px solid var(--line);background:var(--surface);border-radius:12px;text-decoration:none;color:var(--ink);font-size:12px;font-weight:700;box-shadow:var(--shadow)}
-.act span{font-size:11px;font-weight:500;color:var(--muted)}
-.act:hover{border-color:var(--accent);text-decoration:none}
 .biglink{display:block;padding:12px 0;border-top:1px solid var(--line);font-weight:600;font-size:15px}
 .biglink:first-of-type{border-top:0;padding-top:0}
 .biglink small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
 .stick{display:none}
 @media(max-width:900px){
-  .actions{grid-template-columns:repeat(2,1fr)}
   .stick{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:15;background:var(--surface);border-top:1px solid var(--line);padding:8px}
   .stick a{text-align:center;font-size:11px;font-weight:700;color:var(--ink);text-decoration:none;padding:8px 4px}
 }
@@ -183,7 +178,6 @@ body[data-role="staff"] .admin-only{display:none!important}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .form-grid .sel{width:100%}
 @media(max-width:560px){.form-grid{grid-template-columns:1fr}}
-.act.off{opacity:.45;pointer-events:none}
 .secret .mono.revealed{color:var(--ink);word-break:break-all}
 .print-sheet{padding:24px;max-width:800px}
 .print-sheet h2{font-size:14px;margin:18px 0 8px}
@@ -192,3 +186,32 @@ body[data-role="staff"] .admin-only{display:none!important}
 .chip.note{background:#ece7de;color:#6d726c}
 .contact .chip{margin-left:6px}
 .identity .chip{margin-right:0}
+
+/* Client file SoT — scoped so Home chrome / week-board PRs merge cleanly */
+.client-file{max-width:none}
+.client-file-shell{width:100%}
+.client-file-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+.client-file-id{display:flex;gap:14px;align-items:flex-start;min-width:0}
+.client-file-id-body{min-width:0}
+.client-file-id-body h1{font-size:24px;letter-spacing:-.03em;line-height:1.1;font-weight:700}
+.client-file .mark{width:40px;height:40px;border-radius:10px}
+.client-file .meta{margin-top:8px}
+.client-file-tools{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;flex-shrink:0}
+.client-file-biz{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 6px;font-size:13.5px;font-weight:600}
+.client-file-biz a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.client-file-flag-summary{border:0;background:transparent;padding:0;margin:2px 0 0;color:var(--ink);font:inherit;font-size:13.5px;font-weight:600;text-align:left;cursor:pointer}
+.client-file-flag-summary:hover{text-decoration:underline}
+.client-file-flags{margin-top:8px;display:flex;flex-direction:column;gap:6px;max-width:720px}
+.client-file-updated{margin:6px 0 0}
+.client-file-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px;margin-bottom:14px;align-items:start}
+.client-file-pin{border:0;background:transparent;color:var(--muted);min-height:32px;padding:4px 6px;font-size:12px;font-weight:600;flex-shrink:0}
+.client-file-pin:hover{color:var(--accent)}
+.client-file .contact{align-items:center}
+.client-file-stick{display:none}
+@media(max-width:900px){
+  .client-file-grid{grid-template-columns:1fr}
+  .client-file-head{flex-wrap:wrap}
+  .client-file-stick{display:flex;justify-content:space-around;gap:12px;position:fixed;left:0;right:0;bottom:0;z-index:15;background:var(--surface);border-top:1px solid var(--line);padding:10px 12px}
+  .client-file-stick a,.client-file-stick span{font-size:13px;font-weight:600;color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+  .client-file-stick span{color:var(--muted);text-decoration:none}
+}

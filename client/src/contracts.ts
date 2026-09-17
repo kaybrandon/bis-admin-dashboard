@@ -129,6 +129,7 @@ export const HomeClientsFlagsApi = {
   clientFile: "GET /api/clients/{id}",
   print: "GET /api/clients/{id}/print  (no vault, no care flags)",
   addPerson: "POST /api/clients/{id}/people",
+  pinPerson: "POST /api/clients/{id}/people/{personId}/pin  { pinned }",
   addAddress: "POST /api/clients/{id}/addresses",
   addNote: "POST /api/clients/{id}/notes  { body }  (@Name creates a mention)",
   vaultList: "GET /api/clients/{id}/vault  (masked)",

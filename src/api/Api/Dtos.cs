@@ -15,6 +15,7 @@ public record UserCreateRequest(string Name, string Email, string Role, Guid? De
 public record ProfileUpdateRequest(string? Name, string? PhoneMobile, string? PhoneWork, string? Ext);
 public record ClientCreateRequest(string Name, string? Industry, string? Status, string? County, string? BusinessPhone, string? BusinessEmail, string? Website);
 public record PersonWriteRequest(string Name, string? Title, string? Department, string? Email, string? Phone, bool Pinned, bool Primary);
+public record PersonPinRequest(bool Pinned);
 public record AddressWriteRequest(string Label, string? Line1, string? City, string? State, string? Zip, string? County, string? Hours, bool IsPrimary, string? Phone);
 public record VaultWriteRequest(string Department, string Title, string? Username, string Secret, string? Url, string? Note);
 public record NamedRequest(string Name, string? Description, string? Color);

@@ -275,7 +275,7 @@ public static class Endpoints
             var p = new Person
             {
                 Id = Guid.NewGuid(), ClientId = id, Name = req.Name, Title = req.Title, Department = req.Department,
-                Email = req.Email, Phone = req.Phone, Pinned = req.Pinned, Primary = req.Primary
+                Email = req.Email, Phone = req.Phone, Pinned = req.Pinned || req.Primary, Primary = req.Primary
             };
             db.People.Add(p);
             if (req.Primary)
@@ -288,6 +288,19 @@ public static class Endpoints
             await db.SaveChangesAsync();
             await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "person", p.Id, id, null, new { p.Name, p.Email, p.Phone }, null);
             return Results.Ok(new { p.Id });
+        }).RequireAuthorization();
+
+        api.MapPost("/clients/{id:guid}/people/{personId:guid}/pin", async (HttpContext ctx, Guid id, Guid personId, PersonPinRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            var p = await db.People.FirstOrDefaultAsync(x => x.Id == personId && x.ClientId == id);
+            if (p is null) return Results.NotFound();
+            var before = p.Pinned;
+            p.Pinned = req.Pinned;
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "update", "person", p.Id, id, new { pinned = before }, new { pinned = p.Pinned }, null);
+            return Results.Ok(new { p.Id, p.Pinned });
         }).RequireAuthorization();
 
         api.MapPost("/clients/{id:guid}/addresses", async (HttpContext ctx, Guid id, AddressWriteRequest req, AppDbContext db, AuditWriter audit) =>

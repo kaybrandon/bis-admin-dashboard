@@ -178,6 +178,16 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("Jordan Hale", people);
         Assert.Contains("Ronnie", people);
         Assert.Contains("Ana Ruiz", people);
+        Assert.Equal("info@murraymedia.example", file.GetProperty("business").GetProperty("email").GetString());
+        var bre = file.GetProperty("people").EnumerateArray().First(p => p.GetProperty("name").GetString() == "Bre");
+        Assert.True(bre.GetProperty("primary").GetBoolean());
+        Assert.True(bre.GetProperty("pinned").GetBoolean());
+        var scott = file.GetProperty("people").EnumerateArray().First(p => p.GetProperty("name").GetString() == "Scott");
+        var pin = await client.PostAsJsonAsync($"/api/clients/66666666-6666-6666-6666-666666666601/people/{scott.GetProperty("id").GetString()}/pin", new { pinned = true });
+        pin.EnsureSuccessStatusCode();
+        var after = await client.GetFromJsonAsync<JsonElement>("/api/clients/66666666-6666-6666-6666-666666666601");
+        var scottAfter = after.GetProperty("people").EnumerateArray().First(p => p.GetProperty("name").GetString() == "Scott");
+        Assert.True(scottAfter.GetProperty("pinned").GetBoolean());
     }
 
     private static async Task<JsonElement> Login(HttpClient client, string email)

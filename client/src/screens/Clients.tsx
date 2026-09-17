@@ -155,6 +155,7 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   const [lookups, setLookups] = useState<Lookups | null>(null);
   const [err, setErr] = useState("");
   const [revealed, setRevealed] = useState<Record<string, string>>({});
+  const [flagsOpen, setFlagsOpen] = useState(false);
   const [flagOn, setFlagOn] = useState(false);
   const [personOn, setPersonOn] = useState(false);
   const [addrOn, setAddrOn] = useState(false);
@@ -173,6 +174,7 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   };
 
   useEffect(() => { load(); }, [id]);
+  useEffect(() => { setFlagsOpen(id ? readFlagsOpen(id) : false); }, [id]);
   useEffect(() => { api<Lookups>("/api/lookups").then(l => {
     setLookups(l);
     if (l.flagLevels[0]) setFlag(f => ({ ...f, levelId: f.levelId || l.flagLevels[0].id }));
@@ -183,17 +185,28 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   if (!file) return <p>Loading client file…</p>;
 
   const biz = file.business || {};
+  const primaryPerson = file.people.find(p => p.primary) || file.people[0];
   const call = biz.call || file.businessPhone;
-  const email = biz.email || file.businessEmail;
+  const email = biz.email || file.businessEmail || primaryPerson?.email;
   const website = biz.website || file.website;
   const map = biz.map;
-  const mapLabel = biz.mapLabel || "Map";
   const careOn = new Set(file.flags.filter(f => (f.color || f.level || "").toLowerCase().includes("care")).map(f => f.on));
-  const pinned = file.people.filter(p => p.pinned);
-  const depts = unique(file.people.map(p => p.department || "People"));
+  const pinned = file.people.filter(p => p.pinned).sort((a, b) => (a.primary === b.primary ? 0 : a.primary ? -1 : 1));
+  const unpinned = file.people.filter(p => !p.pinned);
+  const depts = sortDepts(unique(unpinned.map(p => p.department || "People")));
+  const flagLevels = unique(file.flags.map(f => f.level).filter(Boolean) as string[]);
+  const flagSummary = file.flags.length === 0
+    ? ""
+    : `${file.flags.length} flag${file.flags.length === 1 ? "" : "s"} · ${flagLevels.join(", ")}.`;
+  const primaryAddr = file.addresses.find(a => a.isPrimary) || file.addresses[0];
+  const place = primaryAddr?.city && primaryAddr?.state
+    ? `${primaryAddr.city}, ${primaryAddr.state}`
+    : file.county ? `${file.county}, TX` : file.county;
+  const persistFlagsOpen = (open: boolean) => {
+    setFlagsOpen(open);
+    if (id) writeFlagsOpen(id, open);
+  };
   const vaultDepts = unique(file.vault.map(v => v.department || "Vault"));
-  const contract = file.customFields && typeof file.customFields["Contract end"] === "string"
-    ? String(file.customFields["Contract end"]) : undefined;
 
   const reveal = async (credId: string) => {
     try {
@@ -240,12 +253,24 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   const addPerson = async () => {
     if (!person.name.trim()) { show("Name the person"); return; }
     try {
-      await api(`/api/clients/${file.id}/people`, { method: "POST", body: JSON.stringify(person) });
+      const payload = { ...person, pinned: person.pinned || person.primary };
+      await api(`/api/clients/${file.id}/people`, { method: "POST", body: JSON.stringify(payload) });
       show("Person added");
       setPersonOn(false);
       setPerson({ name: "", title: "", department: "", email: "", phone: "", pinned: false, primary: false });
       load();
     } catch (e) { show((e as Error).message); }
+  };
+
+  const togglePin = async (p: ClientFileData["people"][number]) => {
+    const next = !p.pinned;
+    setFile(f => f ? { ...f, people: f.people.map(x => x.id === p.id ? { ...x, pinned: next } : x) } : f);
+    try {
+      await api(`/api/clients/${file.id}/people/${p.id}/pin`, { method: "POST", body: JSON.stringify({ pinned: next }) });
+    } catch (e) {
+      show((e as Error).message);
+      load();
+    }
   };
 
   const addAddr = async () => {
@@ -292,39 +317,53 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   };
 
   return (
-    <section>
-      <div className="file">
-        <div className="identity">
-          <div className="mark">{initials(file.name)}</div>
-          <div style={{ flex: 1 }}>
-            <h1>{file.name}</h1>
-            <div className="meta">
-              <span className={"chip" + (file.status === "Active" ? " on" : "")}>{file.status}</span>
-              {file.industry && <span className="chip">{file.industry}</span>}
-              {file.county && <span className="chip">{file.county} County</span>}
-              {call && <span className="chip">{call}</span>}
-              {email && <span className="chip">{email}</span>}
-              {contract && <span className="chip">Contract {monthYear(contract)}</span>}
-            </div>
-            <div className="flags">
-              {file.flags.map(f => (
-                <div className={"flag " + chipColor(f.color, f.level)} key={f.id}>
-                  <b>{f.level || "Flag"} · {f.on}</b>
-                  {f.body}
-                  <div className="muted" style={{ marginTop: 6 }}>{chiWhen(f.createdAt)}{f.createdBy ? " · " + f.createdBy : ""}</div>
-                  <button className="btn s" style={{ marginTop: 6 }} onClick={() => archiveFlag(f.id)}>Archive</button>
+    <section className="client-file">
+      <div className="client-file-shell">
+        <div className="client-file-head">
+          <div className="client-file-id">
+            <div className="mark">{initials(file.name)}</div>
+            <div className="client-file-id-body">
+              <h1>{file.name}</h1>
+              <div className="meta">
+                <span className={"chip" + (file.status === "Active" ? " on" : "")}>{file.status}</span>
+                {file.industry && <span className="chip">{file.industry}</span>}
+                {place && <span className="chip">{place}</span>}
+                {call && <span className="chip">{call}</span>}
+                {email && <span className="chip">{email}</span>}
+              </div>
+              <nav className="client-file-biz" aria-label="Business">
+                {call && <a href={telHref(call)}>Call</a>}
+                {email && <a href={"mailto:" + email}>Email</a>}
+                {map && <a href={map} target="_blank" rel="noopener">Map</a>}
+                {website && <a href={website} target="_blank" rel="noopener">Website</a>}
+              </nav>
+              {flagSummary && (
+                <button type="button" className="client-file-flag-summary" onClick={() => persistFlagsOpen(!flagsOpen)} aria-expanded={flagsOpen}>
+                  {flagSummary}
+                </button>
+              )}
+              {flagsOpen && file.flags.length > 0 && (
+                <div className="client-file-flags">
+                  {file.flags.map(f => (
+                    <div className={"flag " + chipColor(f.color, f.level)} key={f.id}>
+                      <b>{f.level || "Flag"} · {f.on}</b>
+                      {f.body}
+                      <div className="muted" style={{ marginTop: 6 }}>{chiWhen(f.createdAt)}{f.createdBy ? " · " + f.createdBy : ""}</div>
+                      <button className="btn s" style={{ marginTop: 6 }} onClick={() => archiveFlag(f.id)}>Archive</button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+              <p className="client-file-updated muted">
+                {file.updatedAt ? `Updated ${chiAgo(file.updatedAt)}` : "Client file"}
+              </p>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="client-file-tools">
             <button className="btn" onClick={() => setFlagOn(v => !v)}>+ Flag</button>
             <Link className="btn" to={`/clients/${file.id}/print`}>Print sheet</Link>
           </div>
         </div>
-        <p className="muted" style={{ margin: "-8px 0 12px" }}>
-          {file.updatedAt ? `Updated ${chiWhen(file.updatedAt)} · America/Chicago` : "Client file"}
-        </p>
 
         {flagOn && (
           <div className="card mod" style={{ marginBottom: 14 }}>
@@ -343,17 +382,10 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
           </div>
         )}
 
-        <div className="actions">
-          <BizAct kind="Call" label={call} href={telHref(call)} />
-          <BizAct kind="Email" label={email} href={email ? "mailto:" + email : undefined} />
-          <BizAct kind="Map" label={map ? mapLabel : undefined} href={map} />
-          <BizAct kind="Website" label={website ? host(website) : undefined} href={website} />
-        </div>
-
-        <div className="file-top">
-          <div>
+        <div className="client-file-grid">
+          <div className="client-file-main">
             <div className="card mod" style={{ marginBottom: 14 }}>
-              <div className="mod-h"><h2>People</h2><button className="btn s" onClick={() => setPersonOn(v => !v)}>Add</button></div>
+              <div className="mod-h"><h2>People</h2><button className="btn s" onClick={() => setPersonOn(v => !v)}>+ Add</button></div>
               {personOn && (
                 <div className="form-grid" style={{ marginBottom: 12 }}>
                   <input className="sel" placeholder="Name" value={person.name} onChange={e => setPerson({ ...person, name: e.target.value })} />
@@ -361,28 +393,28 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
                   <input className="sel" placeholder="Department" value={person.department} onChange={e => setPerson({ ...person, department: e.target.value })} />
                   <input className="sel" placeholder="Email" value={person.email} onChange={e => setPerson({ ...person, email: e.target.value })} />
                   <input className="sel" placeholder="Phone" value={person.phone} onChange={e => setPerson({ ...person, phone: e.target.value })} />
-                  <label className="muted"><input type="checkbox" checked={person.primary} onChange={e => setPerson({ ...person, primary: e.target.checked })} /> Primary</label>
-                  <label className="muted"><input type="checkbox" checked={person.pinned} onChange={e => setPerson({ ...person, pinned: e.target.checked })} /> Pinned</label>
+                  <label className="muted"><input type="checkbox" checked={person.primary} onChange={e => setPerson({ ...person, primary: e.target.checked, pinned: e.target.checked ? true : person.pinned })} /> Primary</label>
+                  <label className="muted"><input type="checkbox" checked={person.pinned || person.primary} onChange={e => setPerson({ ...person, pinned: e.target.checked })} /> Pinned</label>
                   <button className="btn p" onClick={addPerson}>Save person</button>
                 </div>
               )}
               {pinned.length > 0 && (
                 <div className="dept"><div className="dept-h">Pinned</div>
-                  {pinned.map(p => <PersonRow key={"pin-" + p.id} p={p} care={careOn.has(p.name)} />)}
+                  {pinned.map(p => <PersonRow key={"pin-" + p.id} p={p} care={careOn.has(p.name)} onPin={togglePin} />)}
                 </div>
               )}
               {depts.map(d => (
                 <div className="dept" key={d}>
                   <div className="dept-h">{d}</div>
-                  {file.people.filter(p => (p.department || "People") === d).map(p => (
-                    <PersonRow key={p.id} p={p} care={careOn.has(p.name)} />
+                  {unpinned.filter(p => (p.department || "People") === d).map(p => (
+                    <PersonRow key={p.id} p={p} care={careOn.has(p.name)} onPin={togglePin} />
                   ))}
                 </div>
               ))}
               {file.people.length === 0 && <p className="muted">No people on this file yet.</p>}
             </div>
             <div className="card mod">
-              <div className="mod-h"><h2>Addresses</h2><button className="btn s" onClick={() => setAddrOn(v => !v)}>Add</button></div>
+              <div className="mod-h"><h2>Addresses</h2><button className="btn s" onClick={() => setAddrOn(v => !v)}>+ Add</button></div>
               {addrOn && (
                 <div className="form-grid" style={{ marginBottom: 12 }}>
                   <input className="sel" placeholder="Label (Studio)" value={addr.label} onChange={e => setAddr({ ...addr, label: e.target.value })} />
@@ -397,7 +429,7 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
                   <button className="btn p" onClick={addAddr}>Save address</button>
                 </div>
               )}
-              {file.addresses.map(a => (
+              {[...file.addresses].sort((a, b) => (a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1)).map(a => (
                 <div className="loc" key={a.id}>
                   <div>
                     <strong>{a.label}</strong>
@@ -415,10 +447,10 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
               {file.addresses.length === 0 && <p className="muted">No addresses yet.</p>}
             </div>
           </div>
-          <div className="card mod">
+          <div className="card mod client-file-side">
             <div className="mod-h"><h2>Services</h2></div>
             <p className="muted" style={{ marginBottom: 8 }}>What they pay BIS for.</p>
-            {file.services.map(s => (
+            {[...file.services].sort((a, b) => (a.on === b.on ? (a.name || "").localeCompare(b.name || "") : a.on ? -1 : 1)).map(s => (
               <div className="row" key={s.id}>
                 <div><strong>{s.name || "Service"}</strong>{s.note && <div className="muted">{s.note}</div>}</div>
                 <span className={"chip" + (s.on ? " on" : "")}>{s.on ? "On" : "Off"}</span>
@@ -510,12 +542,12 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
           </div>
         </div>
       </div>
-      <div className="stick">
+      <nav className="client-file-stick" aria-label="Business">
         {call ? <a href={telHref(call)}>Call</a> : <span>Call</span>}
         {email ? <a href={"mailto:" + email}>Email</a> : <span>Email</span>}
         {map ? <a href={map} target="_blank" rel="noopener">Map</a> : <span>Map</span>}
-        {website ? <a href={website} target="_blank" rel="noopener">Web</a> : <span>Web</span>}
-      </div>
+        {website ? <a href={website} target="_blank" rel="noopener">Website</a> : <span>Website</span>}
+      </nav>
     </section>
   );
 }
@@ -574,15 +606,7 @@ export function PrintSheet() {
   );
 }
 
-function BizAct({ kind, label, href }: { kind: string; label?: string; href?: string }) {
-  if (!href || !label) {
-    return <span className="act off">{kind}<span>Not on file</span></span>;
-  }
-  const external = href.startsWith("http");
-  return <a className="act" href={href} target={external ? "_blank" : undefined} rel={external ? "noopener" : undefined}>{kind}<span>{label}</span></a>;
-}
-
-function PersonRow({ p, care }: { p: ClientFileData["people"][number]; care: boolean }) {
+function PersonRow({ p, care, onPin }: { p: ClientFileData["people"][number]; care: boolean; onPin: (p: ClientFileData["people"][number]) => void }) {
   return (
     <div className="row contact">
       <div className="who">
@@ -600,6 +624,9 @@ function PersonRow({ p, care }: { p: ClientFileData["people"][number]; care: boo
           </div>
         </div>
       </div>
+      <button type="button" className="client-file-pin" onClick={() => onPin(p)} title={p.pinned ? "Unpin" : "Pin"} aria-label={p.pinned ? "Unpin " + p.name : "Pin " + p.name}>
+        {p.pinned ? "Unpin" : "Pin"}
+      </button>
     </div>
   );
 }
@@ -615,4 +642,47 @@ function PinIcon() {
 
 function unique(xs: string[]) {
   return [...new Set(xs)];
+}
+
+const DEPT_ORDER = ["Operations", "IT", "Digital"];
+
+function sortDepts(xs: string[]) {
+  return [...xs].sort((a, b) => {
+    const ia = DEPT_ORDER.indexOf(a);
+    const ib = DEPT_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
+function flagsOpenKey(id: string) {
+  return "bis.admin.clientFile.flagsOpen." + id;
+}
+
+function readFlagsOpen(id: string) {
+  try {
+    const v = sessionStorage.getItem(flagsOpenKey(id));
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch { /* private mode */ }
+  return false;
+}
+
+function writeFlagsOpen(id: string, open: boolean) {
+  try { sessionStorage.setItem(flagsOpenKey(id), open ? "1" : "0"); } catch { /* private mode */ }
+}
+
+function chiAgo(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const mins = Math.max(0, Math.round((Date.now() - d.getTime()) / 60_000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
 }
