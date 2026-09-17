@@ -79,7 +79,7 @@ export function RolesPage({ user, toast }: { user: User; toast: ToastFn }) {
                     ) : (
                       <button
                         type="button"
-                        className="btn s p"
+                        className={"btn s" + (locked ? "" : " p")}
                         disabled={locked || busy === row.id}
                         onClick={() => flip(row, true)}
                       >Grant</button>

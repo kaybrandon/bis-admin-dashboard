@@ -30,6 +30,7 @@ a:hover{text-decoration:underline}
 .h p{color:var(--muted);font-size:13px;margin-top:3px}
 .btn{min-height:40px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:600}
 .btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:disabled,.btn[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
 .btn.s{min-height:36px;font-size:12px;font-weight:500}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
