@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import { copyVaultPassword } from "../clipboardVault";
 import type { ClientFile as ClientFileData, ClientListRow, Lookups } from "../contracts";
 import { bytes, chipColor, exportCsv, fileKind, host, initials, mention, monthYear, openAuthedFile, telHref, chiWhen } from "../screenUtil";
+import { workspace } from "../workspace";
 
 type ToastFn = (m: string) => void;
 
@@ -239,8 +241,9 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
     const secret = revealed[credId];
     if (!secret) return;
     try {
-      await navigator.clipboard.writeText(secret);
-      show("Copied · clears in 30s");
+      const seconds = workspace().clipboardClearSeconds;
+      await copyVaultPassword(secret, seconds);
+      show("Copied · clears in " + seconds + "s");
     } catch { show("Copy failed"); }
   };
 
