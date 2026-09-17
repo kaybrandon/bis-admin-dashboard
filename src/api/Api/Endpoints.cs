@@ -148,9 +148,23 @@ public static class Endpoints
                 .GroupBy(m => m.UserId)
                 .Select(g => new { userId = g.Key, name = g.First().User!.Name, count = g.Count() })
                 .OrderByDescending(x => x.count).Take(8).ToListAsync();
-            var birthdays = await db.Users.Where(u => u.BirthdayInWindowOverride || u.Birthday != null).ToListAsync();
-            var inWindow = birthdays.Where(u => u.BirthdayInWindowOverride || (u.Birthday is DateOnly b && ChicagoClock.InBirthdayWindow(b, ChicagoClock.Today)))
+            var today = ChicagoClock.Today;
+            var dated = await db.Users.Where(u => u.BirthdayInWindowOverride || u.Birthday != null || u.WorkAnniversary != null).ToListAsync();
+            var inBirthdayWindow = dated.Where(u => u.BirthdayInWindowOverride || (u.Birthday is DateOnly b && ChicagoClock.InCelebrationWindow(b, today)))
                 .Select(u => new { u.Id, u.Name, initials = Maps.Initials(u.Name) }).ToList();
+            var inAnniversaryWindow = dated.Where(u => u.WorkAnniversary is DateOnly a && ChicagoClock.InCelebrationWindow(a, today))
+                .Select(u => new { u.Id, u.Name, initials = Maps.Initials(u.Name) }).ToList();
+            var celebrations = dated
+                .OrderBy(u => u.Name)
+                .SelectMany(u =>
+                {
+                    var rows = new List<object>();
+                    if (u.BirthdayInWindowOverride || (u.Birthday is DateOnly b && ChicagoClock.InCelebrationWindow(b, today)))
+                        rows.Add(new { u.Id, u.Name, initials = Maps.Initials(u.Name), kind = "birthday" });
+                    if (u.WorkAnniversary is DateOnly a && ChicagoClock.InCelebrationWindow(a, today))
+                        rows.Add(new { u.Id, u.Name, initials = Maps.Initials(u.Name), kind = "anniversary" });
+                    return rows;
+                }).ToList();
             var star = kudos.Where(k => k.FromUserId != Guid.Empty && k.ToUserId != Guid.Empty)
                 .OrderByDescending(k => k.CreatedAt).FirstOrDefault();
             return Results.Ok(new
@@ -176,7 +190,9 @@ public static class Endpoints
                 starOfDay = star is null ? null : new { to = star.ToUser?.Name, body = star.Body, from = star.FromUserId },
                 mentions = mentionBars,
                 kudosTop = top,
-                birthdays = inWindow
+                birthdays = inBirthdayWindow,
+                anniversaries = inAnniversaryWindow,
+                celebrations
             });
         }).RequireAuthorization().WithTags("Home").Produces<HomeBoardDto>();
     }
@@ -730,15 +746,17 @@ public static class Endpoints
             var deny = Authz.RequireHumanStaff(ctx);
             if (deny is not null) return deny;
             var u = await db.Users.Include(x => x.Department).Include(x => x.Manager).FirstAsync(x => x.Id == Authz.Actor(ctx).Id);
-            var before = new { u.Name, u.PhoneMobile, u.PhoneWork, u.Ext, u.Birthday };
+            var before = new { u.Name, u.PhoneMobile, u.PhoneWork, u.Ext, u.Birthday, u.WorkAnniversary };
             if (req.Name is not null) u.Name = req.Name;
             if (req.PhoneMobile is not null) u.PhoneMobile = req.PhoneMobile;
             if (req.PhoneWork is not null) u.PhoneWork = req.PhoneWork;
             if (req.Ext is not null) u.Ext = req.Ext;
             if (ApplyBirthday(u, req.ClearBirthday, req.BirthdayMonth, req.BirthdayDay, req.BirthdayYear, req.Birthday) is { } bad)
                 return bad;
+            if (ApplyWorkAnniversary(u, req.ClearWorkAnniversary, req.WorkAnniversaryMonth, req.WorkAnniversaryDay, req.WorkAnniversaryYear, req.WorkAnniversary) is { } badAnn)
+                return badAnn;
             await db.SaveChangesAsync();
-            await audit.WriteAsync(u.Id, "edit", "user", u.Id, null, before, new { u.Name, u.PhoneMobile, u.PhoneWork, u.Ext, u.Birthday }, null);
+            await audit.WriteAsync(u.Id, "edit", "user", u.Id, null, before, new { u.Name, u.PhoneMobile, u.PhoneWork, u.Ext, u.Birthday, u.WorkAnniversary }, null);
             return Results.Ok(Maps.UserCard(u, await OpenPunch(db, u.Id), 0, 0, 0));
         }).RequireAuthorization();
 
@@ -1127,11 +1145,13 @@ public static class Endpoints
         {
             var u = await db.Users.Include(x => x.Department).Include(x => x.Manager).FirstOrDefaultAsync(x => x.Id == id);
             if (u is null) return Results.NotFound();
-            var before = new { u.Birthday };
+            var before = new { u.Birthday, u.WorkAnniversary };
             if (ApplyBirthday(u, req.ClearBirthday, req.BirthdayMonth, req.BirthdayDay, req.BirthdayYear, req.Birthday) is { } bad)
                 return bad;
+            if (ApplyWorkAnniversary(u, req.ClearWorkAnniversary, req.WorkAnniversaryMonth, req.WorkAnniversaryDay, req.WorkAnniversaryYear, req.WorkAnniversary) is { } badAnn)
+                return badAnn;
             await db.SaveChangesAsync();
-            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "user", u.Id, null, before, new { u.Birthday }, "birthday");
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "user", u.Id, null, before, new { u.Birthday, u.WorkAnniversary }, "birthday");
             return Results.Ok(Maps.UserCard(u, await OpenPunch(db, u.Id), 0, 0, 0));
         });
 
@@ -1411,6 +1431,32 @@ public static class Endpoints
         if (!ChicagoClock.TryParseBirthday(birthday, out var parsed, out var parseErr))
             return Results.BadRequest(new { error = parseErr ?? "Invalid birthday." });
         u.Birthday = parsed;
+        return null;
+    }
+
+    private static IResult? ApplyWorkAnniversary(User u, bool? clear, int? month, int? day, int? year, string? workAnniversary)
+    {
+        if (clear == true)
+        {
+            u.WorkAnniversary = null;
+            return null;
+        }
+        if (month is int m && day is int d)
+        {
+            if (!ChicagoClock.TryComposeBirthday(m, d, year, out var composed, out var err))
+                return Results.BadRequest(new { error = err is null ? "Invalid work anniversary month/day." : err.Replace("birthday", "work anniversary", StringComparison.OrdinalIgnoreCase) });
+            u.WorkAnniversary = composed;
+            return null;
+        }
+        if (workAnniversary is null) return null;
+        if (string.IsNullOrWhiteSpace(workAnniversary))
+        {
+            u.WorkAnniversary = null;
+            return null;
+        }
+        if (!ChicagoClock.TryParseBirthday(workAnniversary, out var parsed, out var parseErr))
+            return Results.BadRequest(new { error = parseErr is null ? "Invalid work anniversary." : parseErr.Replace("Birthday", "Work anniversary") });
+        u.WorkAnniversary = parsed;
         return null;
     }
 

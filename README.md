@@ -32,7 +32,7 @@ Lane split: this branch owns the **API** (vault/RBAC/audit/auth/seed) and the **
 
 Password for all seed users: **`Admin!2026`**
 
-Work phone `(940) 555-0100` + ext (101 / 204 / 118 / 205). Maya’s birthday is forced in-window for demo.
+Work phone `(940) 555-0100` + ext (101 / 204 / 118 / 205). Maya’s birthday is forced in-window for demo. Chris’s work anniversary is in-window.
 
 Clients: Murray Media (Denton, complete), Northstar Dental, Oak + Iron Realty (Collin), Pecan Street Cafe, Harbor Kids Academy (prospect).
 

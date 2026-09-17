@@ -15,6 +15,8 @@ export type User = {
   avatarColor: string;
   birthday?: string | null;
   birthdayInWindow?: boolean;
+  workAnniversary?: string | null;
+  workAnniversaryInWindow?: boolean;
   coveringFor?: string;
   notes?: string;
   where?: { status: string; label: string; workplace?: string; destination?: string };

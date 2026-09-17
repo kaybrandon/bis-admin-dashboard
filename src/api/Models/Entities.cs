@@ -25,6 +25,7 @@ public class User
     public DateTime CreatedAt { get; set; }
     public string? Title { get; set; }
     public DateOnly? Birthday { get; set; }
+    public DateOnly? WorkAnniversary { get; set; }
     public string? CoveringFor { get; set; }
     public string? Notes { get; set; }
     public string AvatarColor { get; set; } = "#1c332c";

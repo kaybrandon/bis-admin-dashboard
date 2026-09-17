@@ -33,10 +33,13 @@ public static class ChicagoClock
         return TimeZoneInfo.ConvertTime(new DateTimeOffset(u), Zone);
     }
 
-    public static bool InBirthdayWindow(DateOnly birthday, DateOnly today)
+    public static bool InBirthdayWindow(DateOnly birthday, DateOnly today) => InCelebrationWindow(birthday, today);
+
+    /// <summary>Yesterday / today / tomorrow on the month-day, America/Chicago calendar.</summary>
+    public static bool InCelebrationWindow(DateOnly date, DateOnly today)
     {
         static int Doy(DateOnly d) => d.DayOfYear;
-        var b = new DateOnly(today.Year, birthday.Month, Math.Min(birthday.Day, DateTime.DaysInMonth(today.Year, birthday.Month)));
+        var b = new DateOnly(today.Year, date.Month, Math.Min(date.Day, DateTime.DaysInMonth(today.Year, date.Month)));
         var yesterday = today.AddDays(-1);
         var tomorrow = today.AddDays(1);
         return b == yesterday || b == today || b == tomorrow || Doy(b) == Doy(yesterday) || Doy(b) == Doy(tomorrow);

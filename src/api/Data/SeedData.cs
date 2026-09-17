@@ -83,6 +83,7 @@ public static class SeedData
             PasswordHash = hash,
             CreatedAt = now,
             Title = "Designer",
+            WorkAnniversary = todayChi,
             AvatarColor = "#6b4a7a",
             Notes = "POS and sites. Quiet Fridays if a cutover is on the board."
         };

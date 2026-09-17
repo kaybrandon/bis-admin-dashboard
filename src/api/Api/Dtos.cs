@@ -12,8 +12,8 @@ public record CommentCreateRequest(string Body);
 public record StickyCreateRequest(double X, double Y, string Color, string Text, Guid? PinnedUserId);
 public record StickyMoveRequest(double X, double Y, string? Text, Guid? PinnedUserId);
 public record UserCreateRequest(string Name, string Email, string Role, Guid? DepartmentId, Guid? ManagerId, string? PhoneMobile, string? PhoneWork, string? Ext, string? Title, string? Password);
-public record ProfileUpdateRequest(string? Name, string? PhoneMobile, string? PhoneWork, string? Ext, string? Birthday, int? BirthdayMonth, int? BirthdayDay, int? BirthdayYear, bool? ClearBirthday);
-public record TeamBirthdayRequest(string? Birthday, int? BirthdayMonth, int? BirthdayDay, int? BirthdayYear, bool? ClearBirthday);
+public record ProfileUpdateRequest(string? Name, string? PhoneMobile, string? PhoneWork, string? Ext, string? Birthday, int? BirthdayMonth, int? BirthdayDay, int? BirthdayYear, bool? ClearBirthday, string? WorkAnniversary, int? WorkAnniversaryMonth, int? WorkAnniversaryDay, int? WorkAnniversaryYear, bool? ClearWorkAnniversary);
+public record TeamBirthdayRequest(string? Birthday, int? BirthdayMonth, int? BirthdayDay, int? BirthdayYear, bool? ClearBirthday, string? WorkAnniversary, int? WorkAnniversaryMonth, int? WorkAnniversaryDay, int? WorkAnniversaryYear, bool? ClearWorkAnniversary);
 public record ClientCreateRequest(string Name, string? Industry, string? Status, string? County, string? BusinessPhone, string? BusinessEmail, string? Website);
 public record ClientUpdateRequest(string? Name, string? Industry, string? Status, string? County, string? BusinessPhone, string? BusinessEmail, string? Website);
 public record PersonWriteRequest(string Name, string? Title, string? Department, string? Email, string? Phone, bool Pinned, bool Primary);
@@ -35,7 +35,8 @@ public record HomeStarDto(string? To, string Body, Guid From);
 public record HomeMentionBarDto(Guid UserId, string Name, int Count);
 public record HomeKudosTopDto(Guid UserId, string? Name, string Initials, string? AvatarColor, int Stars);
 public record HomeBirthdayDto(Guid Id, string Name, string Initials);
-public record HomeBoardDto(DateOnly WeekStart, DateOnly WeekEnd, string WeekLabel, string Tz, HomeStatsDto Stats, IEnumerable<HomePostDto> Posts, HomeStarDto? StarOfDay, IEnumerable<HomeMentionBarDto> Mentions, IEnumerable<HomeKudosTopDto> KudosTop, IEnumerable<HomeBirthdayDto> Birthdays);
+public record HomeCelebrationDto(Guid Id, string Name, string Initials, string Kind);
+public record HomeBoardDto(DateOnly WeekStart, DateOnly WeekEnd, string WeekLabel, string Tz, HomeStatsDto Stats, IEnumerable<HomePostDto> Posts, HomeStarDto? StarOfDay, IEnumerable<HomeMentionBarDto> Mentions, IEnumerable<HomeKudosTopDto> KudosTop, IEnumerable<HomeBirthdayDto> Birthdays, IEnumerable<HomeBirthdayDto> Anniversaries, IEnumerable<HomeCelebrationDto> Celebrations);
 
 public record ClientListRowDto(Guid Id, string Name, string? Industry, string Status, string? County, string? Primary, string? Address, string? ContractEnd, string? BusinessPhone, string? BusinessEmail, string? Website);
 public record ClientBusinessDto(string? Call, string? Email, string? Map, string? MapLabel, string? Website);
@@ -72,6 +73,8 @@ public static class Maps
         avatarColor = u.AvatarColor,
         birthday = u.Birthday,
         birthdayInWindow = u.BirthdayInWindowOverride || (u.Birthday is DateOnly b && Services.ChicagoClock.InBirthdayWindow(b, Services.ChicagoClock.Today)),
+        workAnniversary = u.WorkAnniversary,
+        workAnniversaryInWindow = u.WorkAnniversary is DateOnly a && Services.ChicagoClock.InCelebrationWindow(a, Services.ChicagoClock.Today),
         coveringFor = u.CoveringFor,
         notes = u.Notes,
         where = Presence(open),

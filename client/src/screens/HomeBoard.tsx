@@ -16,6 +16,7 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [celebrateOn, setCelebrateOn] = useState(false);
   const admin = user.role === "admin";
 
   const load = () =>
@@ -29,6 +30,14 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
   }, []);
 
   const names = useMemo(() => Object.fromEntries(team.map(t => [t.id, t.name])), [team]);
+  const celebrations = useMemo(() => {
+    if (!board) return [];
+    if (board.celebrations?.length) return board.celebrations;
+    return [
+      ...(board.birthdays ?? []).map(b => ({ ...b, kind: "birthday" as const })),
+      ...(board.anniversaries ?? []).map(a => ({ ...a, kind: "anniversary" as const }))
+    ];
+  }, [board]);
 
   if (err) return <p className="err">{err}</p>;
   if (!board) return <p>Loading team board…</p>;
@@ -65,16 +74,6 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
         {admin && <button className="btn p admin-only" onClick={() => setPostOn(v => !v)}>+ Post</button>}
       </div>
 
-      {board.birthdays.length > 0 && (
-        <div className="bday-bar">
-          <div>
-            <strong>Birthday window</strong>
-            <div className="muted">{board.birthdays.map(b => b.name).join(" · ")} · yesterday / today / tomorrow · America/Chicago</div>
-          </div>
-          <span className="chip on">{board.birthdays.length === 1 ? "Today-ish" : `${board.birthdays.length} people`}</span>
-        </div>
-      )}
-
       {postOn && admin && (
         <div className="card mod home-card" style={{ marginBottom: 14 }}>
           <div className="mod-h"><h2>New post</h2><span className="chip">Admin · this week</span></div>
@@ -96,6 +95,14 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
         <div className="stat"><span>In the office</span><b>{board.stats.inOffice}</b></div>
         <div className="stat"><span>Open flags</span><b>{board.stats.openFlags}</b></div>
       </div>
+
+      <button type="button" className="card home-card home-celebrate-alert" onClick={() => setCelebrateOn(true)}>
+        <div>
+          <strong>Birthdays &amp; anniversaries</strong>
+          <div className="muted">Yesterday / today / tomorrow · America/Chicago</div>
+        </div>
+        <span className="chip on">{celebrations.length === 0 ? "None" : `${celebrations.length} in the window`}</span>
+      </button>
 
       <div className="home-grid">
         <article className="card mod home-card home-update accent-update">
@@ -152,6 +159,28 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
           ))}
         </article>
       </div>
+
+      {celebrateOn && (
+        <div className="dlg-scrim" onClick={() => setCelebrateOn(false)}>
+          <article className="card mod home-card dlg" onClick={e => e.stopPropagation()}>
+            <div className="mod-h">
+              <h2>Birthdays &amp; anniversaries</h2>
+              <button type="button" className="btn s" onClick={() => setCelebrateOn(false)}>Close</button>
+            </div>
+            <p className="muted" style={{ marginBottom: 10 }}>Yesterday / today / tomorrow · America/Chicago</p>
+            {celebrations.length === 0 && <p className="muted">Nobody in the window.</p>}
+            {celebrations.map(row => (
+              <div className="row" key={`${row.kind}-${row.id}`}>
+                <div>
+                  <strong>{row.name}</strong>
+                  <div className="muted">{row.kind === "anniversary" ? "Work anniversary" : "Birthday"}</div>
+                </div>
+                <span className="chip on">{row.kind === "anniversary" ? "Work anniversary" : "Birthday"}</span>
+              </div>
+            ))}
+          </article>
+        </div>
+      )}
 
       {openPost && (
         <div className="dlg-scrim" onClick={() => setOpenId(null)}>

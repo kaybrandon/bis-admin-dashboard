@@ -245,6 +245,8 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
 
         var home = await client.GetFromJsonAsync<JsonElement>("/api/home");
         Assert.Contains(home.GetProperty("birthdays").EnumerateArray(), b => b.GetProperty("name").GetString() == "Brandon Kay");
+        Assert.Contains(home.GetProperty("celebrations").EnumerateArray(), c =>
+            c.GetProperty("name").GetString() == "Brandon Kay" && c.GetProperty("kind").GetString() == "birthday");
 
         var mayaId = Guid.Parse("22222222-2222-2222-2222-222222222202");
         var adminSave = await client.PutAsJsonAsync($"/api/admin/users/{mayaId}", new { birthdayMonth = 6, birthdayDay = 15, birthdayYear = 1991 });
@@ -261,6 +263,48 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         var ownJson = await own.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(3, DateOnly.Parse(ownJson.GetProperty("birthday").GetString()!).Month);
         Assert.Equal(8, DateOnly.Parse(ownJson.GetProperty("birthday").GetString()!).Day);
+    }
+
+    [Fact]
+    public async Task Work_anniversary_persists_on_profile_and_admin_team_edit()
+    {
+        var client = _factory.CreateClient();
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var today = Bis.Admin.Api.Services.ChicagoClock.Today;
+        var saveMe = await client.PutAsJsonAsync("/api/me", new
+        {
+            name = "Brandon Kay",
+            workAnniversaryMonth = today.Month,
+            workAnniversaryDay = today.Day,
+            workAnniversaryYear = 2014
+        });
+        saveMe.EnsureSuccessStatusCode();
+        var me = await saveMe.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(today.Month, DateOnly.Parse(me.GetProperty("workAnniversary").GetString()!).Month);
+        Assert.Equal(today.Day, DateOnly.Parse(me.GetProperty("workAnniversary").GetString()!).Day);
+        Assert.True(me.GetProperty("workAnniversaryInWindow").GetBoolean());
+
+        var home = await client.GetFromJsonAsync<JsonElement>("/api/home");
+        Assert.Contains(home.GetProperty("anniversaries").EnumerateArray(), a => a.GetProperty("name").GetString() == "Brandon Kay");
+        Assert.Contains(home.GetProperty("celebrations").EnumerateArray(), c =>
+            c.GetProperty("name").GetString() == "Brandon Kay" && c.GetProperty("kind").GetString() == "anniversary");
+
+        var mayaId = Guid.Parse("22222222-2222-2222-2222-222222222202");
+        var adminSave = await client.PutAsJsonAsync($"/api/admin/users/{mayaId}", new { workAnniversaryMonth = 4, workAnniversaryDay = 12, workAnniversaryYear = 2019 });
+        adminSave.EnsureSuccessStatusCode();
+        var team = await client.GetFromJsonAsync<JsonElement>($"/api/team/{mayaId}");
+        Assert.Equal("2019-04-12", team.GetProperty("workAnniversary").GetString());
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+        var blocked = await client.PutAsJsonAsync($"/api/admin/users/{mayaId}", new { workAnniversaryMonth = 1, workAnniversaryDay = 1 });
+        Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
+        var own = await client.PutAsJsonAsync("/api/me", new { workAnniversaryMonth = 7, workAnniversaryDay = 4, workAnniversaryYear = 2022 });
+        own.EnsureSuccessStatusCode();
+        var ownJson = await own.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2022-07-04", ownJson.GetProperty("workAnniversary").GetString());
     }
 
     [Fact]
