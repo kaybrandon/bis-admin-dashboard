@@ -190,6 +190,46 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.True(scottAfter.GetProperty("pinned").GetBoolean());
     }
 
+    [Fact]
+    public async Task Birthday_persists_on_profile_and_admin_team_edit()
+    {
+        var client = _factory.CreateClient();
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var today = Bis.Admin.Api.Services.ChicagoClock.Today;
+        var saveMe = await client.PutAsJsonAsync("/api/me", new
+        {
+            name = "Brandon Kay",
+            birthdayMonth = today.Month,
+            birthdayDay = today.Day
+        });
+        saveMe.EnsureSuccessStatusCode();
+        var me = await saveMe.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(today.Month, DateOnly.Parse(me.GetProperty("birthday").GetString()!).Month);
+        Assert.Equal(today.Day, DateOnly.Parse(me.GetProperty("birthday").GetString()!).Day);
+        Assert.True(me.GetProperty("birthdayInWindow").GetBoolean());
+
+        var home = await client.GetFromJsonAsync<JsonElement>("/api/home");
+        Assert.Contains(home.GetProperty("birthdays").EnumerateArray(), b => b.GetProperty("name").GetString() == "Brandon Kay");
+
+        var mayaId = Guid.Parse("22222222-2222-2222-2222-222222222202");
+        var adminSave = await client.PutAsJsonAsync($"/api/admin/users/{mayaId}", new { birthdayMonth = 6, birthdayDay = 15, birthdayYear = 1991 });
+        adminSave.EnsureSuccessStatusCode();
+        var team = await client.GetFromJsonAsync<JsonElement>($"/api/team/{mayaId}");
+        Assert.Equal("1991-06-15", team.GetProperty("birthday").GetString());
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+        var blocked = await client.PutAsJsonAsync($"/api/admin/users/{mayaId}", new { birthdayMonth = 1, birthdayDay = 1 });
+        Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
+        var own = await client.PutAsJsonAsync("/api/me", new { birthdayMonth = 3, birthdayDay = 8 });
+        own.EnsureSuccessStatusCode();
+        var ownJson = await own.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(3, DateOnly.Parse(ownJson.GetProperty("birthday").GetString()!).Month);
+        Assert.Equal(8, DateOnly.Parse(ownJson.GetProperty("birthday").GetString()!).Day);
+    }
+
     private static async Task<JsonElement> Login(HttpClient client, string email)
     {
         var res = await client.PostAsJsonAsync("/api/auth/login", new { email, password = SeedData.SeedPassword });

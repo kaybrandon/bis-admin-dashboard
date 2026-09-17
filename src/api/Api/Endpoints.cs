@@ -483,14 +483,16 @@ public static class Endpoints
         {
             var deny = Authz.RequireHumanStaff(ctx);
             if (deny is not null) return deny;
-            var u = await db.Users.FirstAsync(x => x.Id == Authz.Actor(ctx).Id);
-            var before = new { u.Name, u.PhoneMobile, u.PhoneWork, u.Ext };
+            var u = await db.Users.Include(x => x.Department).Include(x => x.Manager).FirstAsync(x => x.Id == Authz.Actor(ctx).Id);
+            var before = new { u.Name, u.PhoneMobile, u.PhoneWork, u.Ext, u.Birthday };
             if (req.Name is not null) u.Name = req.Name;
             if (req.PhoneMobile is not null) u.PhoneMobile = req.PhoneMobile;
             if (req.PhoneWork is not null) u.PhoneWork = req.PhoneWork;
             if (req.Ext is not null) u.Ext = req.Ext;
+            if (ApplyBirthday(u, req.ClearBirthday, req.BirthdayMonth, req.BirthdayDay, req.BirthdayYear, req.Birthday) is { } bad)
+                return bad;
             await db.SaveChangesAsync();
-            await audit.WriteAsync(u.Id, "edit", "user", u.Id, null, before, new { u.Name, u.PhoneMobile, u.PhoneWork, u.Ext }, null);
+            await audit.WriteAsync(u.Id, "edit", "user", u.Id, null, before, new { u.Name, u.PhoneMobile, u.PhoneWork, u.Ext, u.Birthday }, null);
             return Results.Ok(Maps.UserCard(u, await OpenPunch(db, u.Id), 0, 0, 0));
         }).RequireAuthorization();
 
@@ -859,6 +861,18 @@ public static class Endpoints
             return Results.Ok(new { u.Id });
         });
 
+        admin.MapPut("/users/{id:guid}", async (HttpContext ctx, Guid id, TeamBirthdayRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var u = await db.Users.Include(x => x.Department).Include(x => x.Manager).FirstOrDefaultAsync(x => x.Id == id);
+            if (u is null) return Results.NotFound();
+            var before = new { u.Birthday };
+            if (ApplyBirthday(u, req.ClearBirthday, req.BirthdayMonth, req.BirthdayDay, req.BirthdayYear, req.Birthday) is { } bad)
+                return bad;
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "user", u.Id, null, before, new { u.Birthday }, "birthday");
+            return Results.Ok(Maps.UserCard(u, await OpenPunch(db, u.Id), 0, 0, 0));
+        });
+
         admin.MapGet("/departments", async (AppDbContext db) => Results.Ok(await db.Departments.OrderBy(d => d.Name).ToListAsync()));
         admin.MapPost("/departments", async (HttpContext ctx, NamedRequest req, AppDbContext db, AuditWriter audit) =>
         {
@@ -1105,6 +1119,32 @@ public static class Endpoints
             updatedAt = c.UpdatedAt,
             print = print ? new { notice = "Printed from Admin · no logins included", omitVault = true, omitCare = true } : null
         };
+    }
+
+    private static IResult? ApplyBirthday(User u, bool? clearBirthday, int? month, int? day, int? year, string? birthday)
+    {
+        if (clearBirthday == true)
+        {
+            u.Birthday = null;
+            return null;
+        }
+        if (month is int m && day is int d)
+        {
+            if (!ChicagoClock.TryComposeBirthday(m, d, year, out var composed, out var err))
+                return Results.BadRequest(new { error = err ?? "Invalid birthday month/day." });
+            u.Birthday = composed;
+            return null;
+        }
+        if (birthday is null) return null;
+        if (string.IsNullOrWhiteSpace(birthday))
+        {
+            u.Birthday = null;
+            return null;
+        }
+        if (!ChicagoClock.TryParseBirthday(birthday, out var parsed, out var parseErr))
+            return Results.BadRequest(new { error = parseErr ?? "Invalid birthday." });
+        u.Birthday = parsed;
+        return null;
     }
 
     private static async Task<Punch?> OpenPunch(AppDbContext db, Guid userId)
