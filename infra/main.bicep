@@ -210,7 +210,7 @@ resource api 'Microsoft.Web/sites@2023-01-01' = {
     httpsOnly: true
     keyVaultReferenceIdentity: apiIdentity.id
     siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|8.0'
+      linuxFxVersion: 'DOTNETCORE|10.0'
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       appSettings: [

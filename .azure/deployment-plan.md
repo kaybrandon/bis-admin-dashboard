@@ -32,7 +32,7 @@ Generated: 2026-09-16
 
 | Component | Type | Technology | Path |
 |-----------|------|------------|------|
-| Admin API | API | ASP.NET Core 8 / EF Core | `src/api` |
+| Admin API | API | ASP.NET Core 10 / EF Core | `src/api` |
 | Admin SPA | Frontend | React + Vite + TypeScript | `client/` |
 | Azure SQL | Data | SQL Server (local: SQLite) | `infra` + connection string |
 | Blob files | Storage | Azure Blob container `files` (local: disk) | `infra` + `BLOB_CONTAINER` |
