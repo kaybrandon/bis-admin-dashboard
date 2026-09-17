@@ -183,6 +183,8 @@ body[data-role="staff"] .admin-only{display:none!important}
 .compose{width:100%;min-height:72px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;background:var(--surface);color:var(--ink);resize:vertical}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .form-grid .sel{width:100%}
+.bday-row{display:grid;grid-template-columns:1.4fr .7fr 1fr;gap:8px;margin:6px 0 8px}
+.bday-row .sel{width:100%}
 @media(max-width:560px){.form-grid{grid-template-columns:1fr}}
 .secret .mono.revealed{color:var(--ink);word-break:break-all}
 .print-sheet{padding:24px;max-width:800px}

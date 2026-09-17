@@ -13,6 +13,7 @@ export type User = {
   ext?: string;
   initials: string;
   avatarColor: string;
+  birthday?: string | null;
   birthdayInWindow?: boolean;
   coveringFor?: string;
   notes?: string;

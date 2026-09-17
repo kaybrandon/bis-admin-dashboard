@@ -231,7 +231,7 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
             <Route path="/clients/:id/print" element={<PrintSheet />} />
             <Route path="/flags" element={<Flags toast={toast} admin={admin} />} />
             <Route path="/team" element={<Team toast={toast} admin={admin} />} />
-            <Route path="/team/:id" element={<Member toast={toast} />} />
+            <Route path="/team/:id" element={<Member toast={toast} admin={admin} />} />
             <Route path="/me" element={<Me user={user} setUser={setUser} toast={toast} />} />
             <Route path="/time" element={<Time user={user} setUser={setUser} toast={toast} />} />
             <Route path="/reports" element={admin ? <Reports toast={toast} /> : <Navigate to="/" />} />
@@ -282,10 +282,19 @@ function Team({ toast, admin }: { toast: ToastFn; admin: boolean }) {
   );
 }
 
-function Member({ toast }: { toast: ToastFn }) {
+function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
   const { id } = useParams();
   const [u, setU] = useState<any>(null);
-  useEffect(() => { api("/api/team/" + id).then(setU); }, [id]);
+  const [bMonth, setBMonth] = useState("");
+  const [bDay, setBDay] = useState("");
+  const [bYear, setBYear] = useState("");
+  useEffect(() => {
+    api<any>("/api/team/" + id).then(row => {
+      setU(row);
+      const p = splitBirthday(row.birthday);
+      setBMonth(p.month); setBDay(p.day); setBYear(p.year);
+    });
+  }, [id]);
   if (!u) return <p>Loading…</p>;
   return (
     <section>
@@ -309,6 +318,17 @@ function Member({ toast }: { toast: ToastFn }) {
           <div className="row"><span className="muted">Work</span><a href={"tel:" + u.phoneWork}>{u.phoneWork}</a></div>
           <div className="row"><span className="muted">Ext</span><strong>{u.ext}</strong></div>
           <div className="row"><span className="muted">Email</span><a href={"mailto:" + u.email}>{u.email}</a></div>
+          {admin ? (
+            <div style={{ marginTop: 12 }}>
+              <BirthdayFields month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
+              <button className="btn s" onClick={async () => {
+                const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(birthdayPayload(bMonth, bDay, bYear)) });
+                setU(saved); toast("Birthday saved");
+              }}>Save birthday</button>
+            </div>
+          ) : u.birthday ? (
+            <div className="row"><span className="muted">Birthday</span><strong>{formatBirthday(u.birthday)}</strong></div>
+          ) : null}
         </div>
         <div className="card mod">
           <div className="mod-h"><h2>Work</h2></div>
@@ -329,15 +349,19 @@ function Member({ toast }: { toast: ToastFn }) {
 }
 
 function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; toast: ToastFn }) {
+  const initialBday = splitBirthday(user.birthday);
   const [name, setName] = useState(user.name);
   const [mobile, setMobile] = useState(user.phoneMobile || "");
   const [work, setWork] = useState(user.phoneWork || "");
   const [ext, setExt] = useState(user.ext || "");
+  const [bMonth, setBMonth] = useState(initialBday.month);
+  const [bDay, setBDay] = useState(initialBday.day);
+  const [bYear, setBYear] = useState(initialBday.year);
   return (
     <section>
       <div className="h"><div><h1>My profile</h1><p>Your Admin user · not a client contact</p></div>
         <button className="btn p" onClick={async () => {
-          const u = await api<User>("/api/me", { method: "PUT", body: JSON.stringify({ name, phoneMobile: mobile, phoneWork: work, ext }) });
+          const u = await api<User>("/api/me", { method: "PUT", body: JSON.stringify({ name, phoneMobile: mobile, phoneWork: work, ext, ...birthdayPayload(bMonth, bDay, bYear) }) });
           setUser(u); toast("Saved");
         }}>Save</button>
       </div>
@@ -350,6 +374,7 @@ function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; 
           <label className="muted">Mobile</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={mobile} onChange={e => setMobile(e.target.value)} />
           <label className="muted">Work phone</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={work} onChange={e => setWork(e.target.value)} />
           <label className="muted">Extension</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={ext} onChange={e => setExt(e.target.value)} />
+          <BirthdayFields month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
         </div>
         <div className="card mod span2">
           <div className="mod-h"><h2>Work</h2></div>
@@ -685,6 +710,45 @@ function Settings({ admin }: { admin: boolean }) {
   );
 }
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function splitBirthday(iso?: string | null) {
+  if (!iso) return { month: "", day: "", year: "" };
+  const [y, m, d] = String(iso).slice(0, 10).split("-");
+  if (!m || !d) return { month: "", day: "", year: "" };
+  return { month: String(Number(m)), day: String(Number(d)), year: Number(y) >= 1900 ? y : "" };
+}
+function birthdayPayload(month: string, day: string, year: string) {
+  if (!month || !day) return { clearBirthday: true };
+  return { birthdayMonth: Number(month), birthdayDay: Number(day), birthdayYear: year.trim() ? Number(year) : undefined, clearBirthday: false };
+}
+function formatBirthday(iso: string) {
+  const p = splitBirthday(iso);
+  if (!p.month || !p.day) return iso;
+  const label = `${MONTHS[Number(p.month) - 1]} ${Number(p.day)}`;
+  return p.year ? `${label}, ${p.year}` : label;
+}
+function BirthdayFields({ month, day, year, setMonth, setDay, setYear }: {
+  month: string; day: string; year: string;
+  setMonth: (v: string) => void; setDay: (v: string) => void; setYear: (v: string) => void;
+}) {
+  return (
+    <>
+      <label className="muted">Birthday</label>
+      <div className="bday-row">
+        <select className="sel" value={month} onChange={e => setMonth(e.target.value)} aria-label="Birthday month">
+          <option value="">Month</option>
+          {MONTHS.map((n, i) => <option key={n} value={String(i + 1)}>{n}</option>)}
+        </select>
+        <select className="sel" value={day} onChange={e => setDay(e.target.value)} aria-label="Birthday day">
+          <option value="">Day</option>
+          {Array.from({ length: 31 }, (_, i) => <option key={i + 1} value={String(i + 1)}>{i + 1}</option>)}
+        </select>
+        <input className="sel" inputMode="numeric" placeholder="Year (optional)" value={year} onChange={e => setYear(e.target.value)} aria-label="Birthday year" />
+      </div>
+      <p className="muted" style={{ marginBottom: 12 }}>Month and day are enough. Year is optional.</p>
+    </>
+  );
+}
 function rich(text: string) {
   const parts = text.split(/(@[A-Za-z][A-Za-z0-9._-]*)/g);
   return parts.map((p, i) => p.startsWith("@") ? <Link className="mention" key={i} to="/mentions">{p}</Link> : <span key={i}>{p}</span>);

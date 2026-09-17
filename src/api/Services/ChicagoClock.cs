@@ -42,6 +42,41 @@ public static class ChicagoClock
         return b == yesterday || b == today || b == tomorrow || Doy(b) == Doy(yesterday) || Doy(b) == Doy(tomorrow);
     }
 
+    /// <summary>Month/day required. Year optional; omitted years use 1 (or 2000 for 29 Feb).</summary>
+    public static bool TryComposeBirthday(int month, int day, int? year, out DateOnly birthday, out string? error)
+    {
+        birthday = default;
+        error = null;
+        var y = year is >= 1900 and <= 9999 ? year.Value : 1;
+        if (month == 2 && day == 29 && DateTime.DaysInMonth(y, 2) < 29)
+            y = 2000;
+        try
+        {
+            birthday = new DateOnly(y, month, day);
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            error = "Invalid birthday month/day.";
+            return false;
+        }
+    }
+
+    public static bool TryParseBirthday(string value, out DateOnly birthday, out string? error)
+    {
+        birthday = default;
+        error = null;
+        var s = value.Trim();
+        if (DateOnly.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out birthday))
+            return true;
+        if (s.Length == 5 && s[2] == '-'
+            && int.TryParse(s.AsSpan(0, 2), out var month)
+            && int.TryParse(s.AsSpan(3, 2), out var day))
+            return TryComposeBirthday(month, day, null, out birthday, out error);
+        error = "Birthday must be YYYY-MM-DD or MM-DD.";
+        return false;
+    }
+
     public static string WeekLabel()
     {
         var start = WeekStart();
