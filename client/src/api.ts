@@ -6,7 +6,9 @@ export type User = {
   email: string;
   role: "staff" | "admin";
   title?: string;
+  departmentId?: string | null;
   department?: string;
+  managerId?: string | null;
   manager?: string;
   phoneMobile?: string;
   phoneWork?: string;

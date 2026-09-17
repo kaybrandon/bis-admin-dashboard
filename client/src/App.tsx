@@ -246,7 +246,7 @@ function Shell({ user, setUser, toast, workspace, setWorkspace }: {
             <Route path="/clients/:id/print" element={<PrintSheet />} />
             <Route path="/flags" element={<Flags toast={toast} admin={admin} />} />
             <Route path="/team" element={<Team toast={toast} admin={admin} />} />
-            <Route path="/team/:id" element={<Member toast={toast} admin={admin} />} />
+            <Route path="/team/:id" element={<Member toast={toast} admin={admin} user={user} />} />
             <Route path="/me" element={<Me user={user} setUser={setUser} toast={toast} />} />
             <Route path="/time" element={<Time user={user} setUser={setUser} toast={toast} />} />
             <Route path="/reports" element={admin ? <Reports toast={toast} /> : <Navigate to="/" />} />
@@ -283,15 +283,97 @@ function clockStatusCopy(open?: User["openPunch"]) {
     : `Clocked in · ${place}`;
 }
 
+type TeamDraft = {
+  name: string; email: string; role: "staff" | "admin"; title: string;
+  departmentId: string; managerId: string; phoneMobile: string; phoneWork: string;
+  ext: string; notes: string; coveringFor: string; password: string;
+};
+function emptyTeamDraft(): TeamDraft {
+  return { name: "", email: "", role: "staff", title: "", departmentId: "", managerId: "", phoneMobile: "", phoneWork: "", ext: "", notes: "", coveringFor: "", password: "" };
+}
+function draftFromMember(u: any): TeamDraft {
+  return {
+    name: u.name || "", email: u.email || "", role: u.role === "admin" ? "admin" : "staff",
+    title: u.title || "", departmentId: u.departmentId || "", managerId: u.managerId || "",
+    phoneMobile: u.phoneMobile || "", phoneWork: u.phoneWork || "", ext: u.ext || "",
+    notes: u.notes || "", coveringFor: u.coveringFor || "", password: ""
+  };
+}
+function teamWritePayload(d: TeamDraft, bMonth: string, bDay: string, bYear: string, aMonth: string, aDay: string, aYear: string, mode: "create" | "admin" | "self") {
+  const dates = { ...birthdayPayload(bMonth, bDay, bYear), ...anniversaryPayload(aMonth, aDay, aYear) };
+  if (mode === "self") return { name: d.name, phoneMobile: d.phoneMobile, phoneWork: d.phoneWork, ext: d.ext, ...dates };
+  const body: Record<string, unknown> = {
+    name: d.name.trim(), email: d.email.trim(), role: d.role, title: d.title,
+    phoneMobile: d.phoneMobile, phoneWork: d.phoneWork, ext: d.ext, notes: d.notes, coveringFor: d.coveringFor, ...dates
+  };
+  if (d.departmentId) body.departmentId = d.departmentId;
+  else if (mode === "admin") body.clearDepartment = true;
+  if (d.managerId) body.managerId = d.managerId;
+  else if (mode === "admin") body.clearManager = true;
+  if (mode === "create" && d.password.trim()) body.password = d.password;
+  return body;
+}
+/** Device SMS compose only — no Twilio / no server send. */
+export function smsComposeHref(phone?: string | null, body?: string) {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  const e164 = digits.length === 10 ? `+1${digits}`
+    : digits.length === 11 && digits.startsWith("1") ? `+${digits}`
+    : digits.startsWith("1") ? `+${digits}` : `+1${digits}`;
+  return body ? `sms:${e164}?body=${encodeURIComponent(body)}` : `sms:${e164}`;
+}
+
 function Team({ toast, admin }: { toast: ToastFn; admin: boolean }) {
   const [rows, setRows] = useState<any[]>([]);
+  const [deps, setDeps] = useState<{ id: string; name: string }[]>([]);
+  const [addOn, setAddOn] = useState(false);
+  const [draft, setDraft] = useState<TeamDraft>(emptyTeamDraft);
+  const [bMonth, setBMonth] = useState("");
+  const [bDay, setBDay] = useState("");
+  const [bYear, setBYear] = useState("");
+  const [aMonth, setAMonth] = useState("");
+  const [aDay, setADay] = useState("");
+  const [aYear, setAYear] = useState("");
   const nav = useNavigate();
-  useEffect(() => { api<any[]>("/api/team").then(setRows); }, []);
+  const load = () => api<any[]>("/api/team").then(setRows);
+  useEffect(() => {
+    load();
+    if (admin) api<{ id: string; name: string }[]>("/api/admin/departments").then(setDeps).catch(() => {});
+  }, [admin]);
   return (
     <section>
       <div className="h"><div><h1>Team</h1><p>BIS people · tap to call · clock in so the shop knows where you are</p></div>
-        {admin && <button className="btn" onClick={() => exportCsv("/api/admin/export/people", toast)}>Export</button>}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {admin && <button className="btn p" onClick={() => setAddOn(v => !v)}>Add team member</button>}
+          {admin && <button className="btn" onClick={() => exportCsv("/api/admin/export/people", toast)}>Export</button>}
+        </div>
       </div>
+      {admin && addOn && (
+        <div className="card mod" style={{ marginBottom: 14 }}>
+          <div className="mod-h"><h2>Add team member</h2></div>
+          <TeamFields draft={draft} setDraft={setDraft} deps={deps} people={rows} admin />
+          <DateFields label="Birthday" month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
+          <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
+          <label className="muted">Covering for</label>
+          <input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={draft.coveringFor} onChange={e => setDraft({ ...draft, coveringFor: e.target.value })} aria-label="Covering for" />
+          <label className="muted">Notes</label>
+          <textarea className="compose" style={{ marginBottom: 12 }} value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })} aria-label="Notes" />
+          <label className="muted">Password (optional)</label>
+          <input className="sel" type="password" style={{ width: "100%", margin: "6px 0 12px" }} value={draft.password} onChange={e => setDraft({ ...draft, password: e.target.value })} placeholder="Leave blank for seed password" aria-label="Password" />
+          <button className="btn p" onClick={async () => {
+            if (!draft.name.trim() || !draft.email.trim()) { toast("Name and email are required"); return; }
+            try {
+              const created = await api<{ id: string }>("/api/admin/users", { method: "POST", body: JSON.stringify(teamWritePayload(draft, bMonth, bDay, bYear, aMonth, aDay, aYear, "create")) });
+              toast("Team member added");
+              setAddOn(false);
+              setDraft(emptyTeamDraft());
+              setBMonth(""); setBDay(""); setBYear("");
+              setAMonth(""); setADay(""); setAYear("");
+              nav("/team/" + created.id);
+            } catch (e) { toast((e as Error).message); }
+          }}>Save team member</button>
+        </div>
+      )}
       <div className="card team-table"><div className="table-wrap"><table>
         <thead><tr><th></th><th>Name</th><th>Title</th><th>Dept</th><th>Mobile</th><th>Work</th><th>Ext</th><th>Where</th></tr></thead>
         <tbody>
@@ -313,62 +395,74 @@ function Team({ toast, admin }: { toast: ToastFn; admin: boolean }) {
   );
 }
 
-function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
+function Member({ toast, admin, user }: { toast: ToastFn; admin: boolean; user: User }) {
   const { id } = useParams();
   const [u, setU] = useState<any>(null);
+  const [draft, setDraft] = useState<TeamDraft>(emptyTeamDraft);
+  const [deps, setDeps] = useState<{ id: string; name: string }[]>([]);
+  const [people, setPeople] = useState<any[]>([]);
   const [bMonth, setBMonth] = useState("");
   const [bDay, setBDay] = useState("");
   const [bYear, setBYear] = useState("");
   const [aMonth, setAMonth] = useState("");
   const [aDay, setADay] = useState("");
   const [aYear, setAYear] = useState("");
+  const canEdit = admin || user.id === id;
   useEffect(() => {
     api<any>("/api/team/" + id).then(row => {
       setU(row);
+      setDraft(draftFromMember(row));
       const p = splitDate(row.birthday);
       setBMonth(p.month); setBDay(p.day); setBYear(p.year);
       const a = splitDate(row.workAnniversary);
       setAMonth(a.month); setADay(a.day); setAYear(a.year);
     });
-  }, [id]);
+    api<any[]>("/api/team").then(setPeople).catch(() => {});
+    if (admin) api<{ id: string; name: string }[]>("/api/admin/departments").then(setDeps).catch(() => {});
+  }, [id, admin]);
   if (!u) return <p>Loading…</p>;
+  const first = (u.name || "").split(" ")[0] || "there";
+  const sms = smsComposeHref(u.phoneMobile, `Hi ${first} —`);
+  const save = async () => {
+    try {
+      const saved = await api<any>("/api/team/" + id, { method: "PUT", body: JSON.stringify(teamWritePayload(draft, bMonth, bDay, bYear, aMonth, aDay, aYear, admin ? "admin" : "self")) });
+      setU(saved);
+      setDraft(draftFromMember(saved));
+      toast("Saved");
+    } catch (e) { toast((e as Error).message); }
+  };
   return (
     <section>
       <div className="h"><div><h1>{u.name}</h1><p>{u.title} · {u.department}</p></div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <a className="btn p" href={"tel:" + u.phoneMobile}>Call mobile</a>
+          {sms && <a className="btn" href={sms}>Text</a>}
           <a className="btn" href={"mailto:" + u.email}>Email</a>
+          {canEdit && <button className="btn p" onClick={save}>Save</button>}
           <button className="btn" onClick={async () => {
-            const body = prompt("One thing " + u.name.split(" ")[0] + " did"); if (!body) return;
+            const body = prompt("One thing " + first + " did"); if (!body) return;
             await api("/api/kudos", { method: "POST", body: JSON.stringify({ toUserId: u.id, body }) });
             toast("Star to " + u.name + " · " + body); setU(await api("/api/team/" + id));
           }}>Give a star</button>
-          {u.birthdayInWindow && <button className="btn p" onClick={() => { confetti(); toast("Happy birthday, " + u.name.split(" ")[0]); }}>Shout happy birthday</button>}
+          {u.birthdayInWindow && <button className="btn p" onClick={() => { confetti(); toast("Happy birthday, " + first); }}>Shout happy birthday</button>}
         </div>
       </div>
       <div className="modules">
         <div className="card mod">
           <div className="who" style={{ marginBottom: 12 }}><div className="av" style={{ background: u.avatarColor, width: 56, height: 56, fontSize: 16 }}>{u.initials}</div>
-            <div><strong>{u.name}</strong><div className="muted">{u.role === "admin" ? "Admin" : "Staff"}</div></div></div>
-          <div className="row"><span className="muted">Mobile</span><a href={"tel:" + u.phoneMobile}>{u.phoneMobile}</a></div>
-          <div className="row"><span className="muted">Work</span><a href={"tel:" + u.phoneWork}>{u.phoneWork}</a></div>
-          <div className="row"><span className="muted">Ext</span><strong>{u.ext}</strong></div>
-          <div className="row"><span className="muted">Email</span><a href={"mailto:" + u.email}>{u.email}</a></div>
-          {admin ? (
-            <div style={{ marginTop: 12 }}>
+            <div><strong>{draft.name || u.name}</strong><div className="muted">{(admin ? draft.role : u.role) === "admin" ? "Admin" : "Staff"}</div></div></div>
+          {canEdit ? (
+            <>
+              <TeamFields draft={draft} setDraft={setDraft} deps={deps} people={people} admin={admin} excludeId={u.id} />
               <DateFields label="Birthday" month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
-              <button className="btn s" onClick={async () => {
-                const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(birthdayPayload(bMonth, bDay, bYear)) });
-                setU(saved); toast("Birthday saved");
-              }}>Save birthday</button>
               <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
-              <button className="btn s" onClick={async () => {
-                const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(anniversaryPayload(aMonth, aDay, aYear)) });
-                setU(saved); toast("Work anniversary saved");
-              }}>Save work anniversary</button>
-            </div>
+            </>
           ) : (
             <>
+              <div className="row"><span className="muted">Mobile</span><a href={"tel:" + u.phoneMobile}>{u.phoneMobile}</a></div>
+              <div className="row"><span className="muted">Work</span><a href={"tel:" + u.phoneWork}>{u.phoneWork}</a></div>
+              <div className="row"><span className="muted">Ext</span><strong>{u.ext}</strong></div>
+              <div className="row"><span className="muted">Email</span><a href={"mailto:" + u.email}>{u.email}</a></div>
               {u.birthday ? <div className="row"><span className="muted">Birthday</span><strong>{formatDate(u.birthday)}</strong></div> : null}
               {u.workAnniversary ? <div className="row"><span className="muted">Work anniversary</span><strong>{formatDate(u.workAnniversary)}</strong></div> : null}
             </>
@@ -376,19 +470,75 @@ function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
         </div>
         <div className="card mod">
           <div className="mod-h"><h2>Work</h2></div>
-          <div className="row"><span className="muted">Department</span><strong>{u.department}</strong></div>
-          <div className="row"><span className="muted">Manager</span><strong>{u.manager || "—"}</strong></div>
+          {canEdit && admin ? (
+            <p className="muted" style={{ marginBottom: 8 }}>Department, role, and manager are in the fields on the left.</p>
+          ) : (
+            <>
+              <div className="row"><span className="muted">Department</span><strong>{u.department}</strong></div>
+              <div className="row"><span className="muted">Manager</span><strong>{u.manager || "—"}</strong></div>
+            </>
+          )}
           <div className="row"><span className="muted">Where</span><span className={"chip status-" + (u.where?.status || "out")}>{u.where?.label}</span></div>
-          {u.coveringFor && <div className="row"><span className="muted">Covering</span><strong>{u.coveringFor}</strong></div>}
+          {!canEdit && u.coveringFor && <div className="row"><span className="muted">Covering</span><strong>{u.coveringFor}</strong></div>}
         </div>
         <div className="card mod">
           <div className="mod-h"><h2>This week</h2></div>
           <div className="row"><span className="muted">Kudos</span><strong>{u.kudosWeek} ★ week · {u.kudosMonth} ★ month</strong></div>
           <div className="row"><span className="muted">Mentions</span><strong>{u.mentionsWeek}</strong></div>
         </div>
-        <div className="card mod"><div className="mod-h"><h2>Notes</h2></div><p className="note">{u.notes}</p></div>
+        <div className="card mod">
+          <div className="mod-h"><h2>Notes</h2></div>
+          {canEdit && admin ? (
+            <>
+              <label className="muted">Covering for</label>
+              <input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={draft.coveringFor} onChange={e => setDraft({ ...draft, coveringFor: e.target.value })} aria-label="Covering for" />
+              <label className="muted">Notes</label>
+              <textarea className="compose" value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })} aria-label="Notes" />
+            </>
+          ) : <p className="note">{u.notes}</p>}
+        </div>
       </div>
     </section>
+  );
+}
+
+function TeamFields({ draft, setDraft, deps, people, admin, excludeId }: {
+  draft: TeamDraft; setDraft: (d: TeamDraft) => void;
+  deps: { id: string; name: string }[]; people: { id: string; name: string }[];
+  admin: boolean; excludeId?: string;
+}) {
+  const set = (k: keyof TeamDraft, v: string) => setDraft({ ...draft, [k]: v });
+  return (
+    <div className="form-grid" style={{ marginBottom: 12 }}>
+      <input className="sel" placeholder="Name" aria-label="Name" value={draft.name} onChange={e => set("name", e.target.value)} />
+      {admin ? (
+        <input className="sel" placeholder="Email" aria-label="Email" value={draft.email} onChange={e => set("email", e.target.value)} />
+      ) : (
+        <input className="sel" placeholder="Email" aria-label="Email" value={draft.email} readOnly />
+      )}
+      <input className="sel" placeholder="Mobile" aria-label="Mobile" value={draft.phoneMobile} onChange={e => set("phoneMobile", e.target.value)} />
+      <input className="sel" placeholder="Work phone" aria-label="Work phone" value={draft.phoneWork} onChange={e => set("phoneWork", e.target.value)} />
+      <input className="sel" placeholder="Extension" aria-label="Extension" value={draft.ext} onChange={e => set("ext", e.target.value)} />
+      {admin && <input className="sel" placeholder="Title" aria-label="Title" value={draft.title} onChange={e => set("title", e.target.value)} />}
+      {admin && (
+        <select className="sel" aria-label="Role" value={draft.role} onChange={e => setDraft({ ...draft, role: e.target.value === "admin" ? "admin" : "staff" })}>
+          <option value="staff">Staff</option>
+          <option value="admin">Admin</option>
+        </select>
+      )}
+      {admin && (
+        <select className="sel" aria-label="Department" value={draft.departmentId} onChange={e => set("departmentId", e.target.value)}>
+          <option value="">Department</option>
+          {deps.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+      )}
+      {admin && (
+        <select className="sel" aria-label="Manager" value={draft.managerId} onChange={e => set("managerId", e.target.value)}>
+          <option value="">Manager</option>
+          {people.filter(p => p.id !== excludeId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+    </div>
   );
 }
 

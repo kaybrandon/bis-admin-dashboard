@@ -309,6 +309,64 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Brandon_adds_and_edits_team_member_Maya_cannot_add()
+    {
+        var client = _factory.CreateClient();
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var email = $"hire-{Guid.NewGuid():N}@bisconsultants.example";
+        var create = await client.PostAsJsonAsync("/api/admin/users", new
+        {
+            name = "Riley Hire",
+            email,
+            role = "staff",
+            title = "Technician",
+            departmentId = Guid.Parse("11111111-1111-1111-1111-111111111102"),
+            managerId = Guid.Parse("22222222-2222-2222-2222-222222222201"),
+            phoneMobile = "(940) 555-0199",
+            phoneWork = "(940) 555-0100",
+            ext = "310",
+            notes = "New hire · pair with Maya",
+            coveringFor = ""
+        });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        var id = created.GetProperty("id").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(id));
+        Assert.Equal("Riley Hire", created.GetProperty("name").GetString());
+        Assert.Equal("staff", created.GetProperty("role").GetString());
+        Assert.Equal("(940) 555-0199", created.GetProperty("phoneMobile").GetString());
+
+        var team = await client.GetFromJsonAsync<JsonElement>("/api/team");
+        Assert.Contains(team.EnumerateArray(), u => u.GetProperty("email").GetString() == email);
+
+        var edit = await client.PutAsJsonAsync($"/api/team/{id}", new
+        {
+            name = "Riley Hire",
+            title = "Senior technician",
+            phoneMobile = "(940) 555-0188"
+        });
+        Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        var edited = await edit.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Senior technician", edited.GetProperty("title").GetString());
+        Assert.Equal("(940) 555-0188", edited.GetProperty("phoneMobile").GetString());
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+        var blockedAdd = await client.PostAsJsonAsync("/api/admin/users", new { name = "Nope", email = "nope@bisconsultants.example", role = "staff" });
+        Assert.Equal(HttpStatusCode.Forbidden, blockedAdd.StatusCode);
+        var blockedEdit = await client.PutAsJsonAsync($"/api/team/{id}", new { name = "Hacked" });
+        Assert.Equal(HttpStatusCode.Forbidden, blockedEdit.StatusCode);
+        var mayaId = Guid.Parse("22222222-2222-2222-2222-222222222202");
+        var own = await client.PutAsJsonAsync($"/api/team/{mayaId}", new { name = "Maya Chen", phoneMobile = "(940) 555-0101" });
+        Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+        var brandonId = Guid.Parse("22222222-2222-2222-2222-222222222201");
+        var blockedBrandon = await client.PutAsJsonAsync($"/api/team/{brandonId}", new { name = "Nope" });
+        Assert.Equal(HttpStatusCode.Forbidden, blockedBrandon.StatusCode);
+    }
+
+    [Fact]
     public async Task Brandon_edits_murray_file_and_catalog_maya_cannot_add_catalog()
     {
         var client = _factory.CreateClient();
