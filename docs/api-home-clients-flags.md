@@ -22,6 +22,10 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 - `birthdays[]` — yesterday/today/tomorrow; Maya is seeded in-window
 - `anniversaries[]` — same window on work anniversary (hire / start date); Chris is seeded in-window
 - `celebrations[]` — `{ id, name, initials, kind }` where `kind` is `birthday` or `anniversary`
+- Create win / update: `POST /api/posts` `{ kind, title, body }` (Admin)
+- Edit update: `PUT /api/posts/{id}` `{ title?, body? }` (Admin)
+- Add kudos / set star of the day: `POST /api/kudos` `{ toUserId, body }`
+- Add a mention: `POST /api/mentions` `{ userId, snippet }`
 
 ## Clients
 
