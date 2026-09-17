@@ -118,6 +118,8 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("/api/admin/services", json);
         Assert.Contains("/api/flags", json);
         Assert.Contains("/api/settings", json);
+        Assert.Contains("/api/roles", json);
+        Assert.Contains("/api/shoutouts", json);
         Assert.Contains("HomeBoardDto", json);
         Assert.Contains("ClientFileDto", json);
         Assert.Contains("FlagRowDto", json);

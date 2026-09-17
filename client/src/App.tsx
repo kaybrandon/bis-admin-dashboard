@@ -4,6 +4,8 @@ import { api, login, logout, me, refresh, setToken, token, type User } from "./a
 import { Home } from "./screens/HomeBoard";
 import { ClientFile, Clients, PrintSheet } from "./screens/Clients";
 import { Flags } from "./screens/Flags";
+import { RolesPage } from "./screens/Roles";
+import { ShoutoutButton, ShoutoutToast, useShoutoutFeed, type ShoutItem } from "./screens/Shoutout";
 import { clearCopiedPasswordNow } from "./clipboardVault";
 import { DEFAULT_WORKSPACE, loadWorkspace, resetWorkspace, type WorkspaceSettings } from "./workspace";
 
@@ -110,9 +112,11 @@ function Shell({ user, setUser, toast, workspace, setWorkspace }: {
   const [destOther, setDestOther] = useState("");
   const [presence, setPresence] = useState<any[]>([]);
   const [q, setQ] = useState("");
+  const [shout, setShout] = useState<ShoutItem | null>(null);
   const clockBtnRef = useRef<HTMLButtonElement>(null);
   const clocked = !!user.openPunch;
   const place = user.openPunch?.workplace;
+  const { cooldown, setCooldown } = useShoutoutFeed(user, setShout);
 
   useEffect(() => { api<any[]>("/api/presence").then(setPresence).catch(() => {}); }, [user.openPunch]);
   useEffect(() => { document.body.classList.toggle("nav-open", navOpen); }, [navOpen]);
@@ -178,6 +182,7 @@ function Shell({ user, setUser, toast, workspace, setWorkspace }: {
         {admin && <NavBtn on={() => go("/reports")} active={active("/reports")} label="Reports" />}
         {admin && <NavBtn on={() => go("/admin")} active={active("/admin")} label="Admin" />}
         <NavBtn on={() => go("/settings")} active={active("/settings")} label="Settings" />
+        {active("/settings") && <NavBtn on={() => go("/settings/roles")} active={active("/settings/roles")} label="Roles" sub />}
         <div className="nav-label">Signed in</div>
         <div className="presence">
           {presence.map(p => (
@@ -202,6 +207,7 @@ function Shell({ user, setUser, toast, workspace, setWorkspace }: {
             {clockStatusCopy(user.openPunch)}
           </button>
           <div className="who-chip">
+            <ShoutoutButton user={user} toast={toast} cooldown={cooldown} setCooldown={setCooldown} />
             <button className="photo-btn" onClick={() => nav("/me")} title="My profile" aria-label="My profile"><div className="me">{user.initials}</div></button>
             <button onClick={() => nav("/me")} style={{ border: 0, background: "transparent", textAlign: "left", padding: 0 }}>
               <div className="who-meta">{user.name}</div>
@@ -255,16 +261,18 @@ function Shell({ user, setUser, toast, workspace, setWorkspace }: {
             <Route path="/kudos" element={<KudosPage toast={toast} />} />
             <Route path="/mentions" element={<Mentions />} />
             <Route path="/admin" element={admin ? <AdminPage toast={toast} /> : <Navigate to="/" />} />
-            <Route path="/settings" element={<Settings admin={admin} workspace={workspace} setWorkspace={setWorkspace} toast={toast} />} />
+            <Route path="/settings" element={<Settings admin={admin} user={user} tab="workspace" workspace={workspace} setWorkspace={setWorkspace} toast={toast} />} />
+            <Route path="/settings/roles" element={<Settings admin={admin} user={user} tab="roles" workspace={workspace} setWorkspace={setWorkspace} toast={toast} />} />
           </Routes>
         </div>
       </div>
+      <ShoutoutToast item={shout} onDone={() => setShout(null)} />
     </>
   );
 }
 
-function NavBtn({ on, active, label }: { on: () => void; active: boolean; label: string }) {
-  return <button className={"nav-btn" + (active ? " active" : "")} onClick={on}>{label}</button>;
+function NavBtn({ on, active, label, sub }: { on: () => void; active: boolean; label: string; sub?: boolean }) {
+  return <button className={"nav-btn" + (sub ? " sub" : "") + (active ? " active" : "")} onClick={on}>{label}</button>;
 }
 
 function punchPlaceLabel(workplace?: string) {
@@ -687,7 +695,8 @@ function AdminPage({ toast }: { toast: ToastFn }) {
   }, []);
   return (
     <section>
-      <div className="h"><div><h1>Admin</h1><p>BIS users, departments, and exports. Admin only.</p></div></div>
+      <div className="h"><div><h1>Admin</h1><p>BIS users, departments, and exports. Admin only.</p></div>
+        <Link className="btn" to="/settings/roles">Roles</Link></div>
       <div className="card mod" style={{ marginBottom: 14 }}>
         <div className="mod-h"><h2>Who can do what</h2></div>
         <p className="muted">Staff: client file, vault reveal, flags, team, own time, #Post It, kudos, mentions, print (no secrets). Admin: reports, audit, users, catalog, tokens, export.</p>
@@ -761,8 +770,8 @@ function CatalogAdd({ onAdded, toast }: { onAdded: () => Promise<void>; toast: T
   );
 }
 
-function Settings({ admin, workspace, setWorkspace, toast }: {
-  admin: boolean; workspace: WorkspaceSettings; setWorkspace: (s: WorkspaceSettings) => void; toast: ToastFn;
+function Settings({ admin, user, tab, workspace, setWorkspace, toast }: {
+  admin: boolean; user: User; tab: "workspace" | "roles"; workspace: WorkspaceSettings; setWorkspace: (s: WorkspaceSettings) => void; toast: ToastFn;
 }) {
   const [companyName, setCompanyName] = useState(workspace.companyName);
   const [idleMinutes, setIdleMinutes] = useState(String(workspace.idleMinutes));
@@ -796,10 +805,20 @@ function Settings({ admin, workspace, setWorkspace, toast }: {
   return (
     <section>
       <div className="h">
-        <div><h1>Settings</h1><p>Workspace options for Admin at {workspace.companyName}.</p></div>
-        {admin && <button className="btn p" onClick={save}>Save</button>}
+        <div>
+          <h1>{tab === "roles" ? "Roles" : "Settings"}</h1>
+          <p>{tab === "roles"
+            ? "Dashboard administrator · grant / revoke · Global Admin only"
+            : "Workspace options for Admin at " + workspace.companyName + "."}</p>
+        </div>
+        {tab === "workspace" && admin && <button className="btn p" onClick={save}>Save</button>}
       </div>
-      <div className="modules">
+      <div className="tabs">
+        <Link className={"tab" + (tab === "workspace" ? " on" : "")} to="/settings">Workspace</Link>
+        <Link className={"tab" + (tab === "roles" ? " on" : "")} to="/settings/roles">Roles</Link>
+      </div>
+      {tab === "roles" && <RolesPage user={user} toast={toast} />}
+      {tab === "workspace" && <div className="modules">
         {admin && <div className="card mod"><div className="mod-h"><h2>Workspace</h2></div>
           <div className="set-row">
             <div><strong>Company name</strong><div className="muted">Shown in the Admin workspace</div></div>
@@ -831,7 +850,7 @@ function Settings({ admin, workspace, setWorkspace, toast }: {
         {admin && <div className="card mod"><div className="mod-h"><h2>Geofence</h2></div>
           <div className="set-row"><div><strong>Never auto Home</strong><div className="muted">Home is a tap, not a fence.</div></div><div className="toggle on"><i /></div></div>
         </div>}
-      </div>
+      </div>}
     </section>
   );
 }

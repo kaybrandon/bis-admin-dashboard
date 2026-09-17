@@ -159,4 +159,40 @@ export const HomeClientsFlagsApi = {
   lookups: "GET /api/lookups  → counties, flagLevels, services, departments",
 } as const;
 
+export type RoleRow = {
+  id: string;
+  name: string;
+  email: string;
+  initials: string;
+  avatarColor: string;
+  dashboardAdmin: boolean;
+  isGlobalAdmin: boolean;
+};
+
+export type ShoutoutItem = {
+  id: string;
+  preset?: string | null;
+  emoji?: string | null;
+  text?: string | null;
+  message: string;
+  from: string;
+  fromUserId: string;
+  createdAt: string;
+};
+
+export type ShoutoutFeed = {
+  items: ShoutoutItem[];
+  canSend: boolean;
+  cooldownSeconds: number;
+  waitLabel?: string | null;
+};
+
+export const RolesShoutoutApi = {
+  roles: "GET /api/roles",
+  grant: "POST /api/roles/{id}/grant  Global Admin only · no self-promote",
+  revoke: "POST /api/roles/{id}/revoke  Global Admin only · no self-promote",
+  feed: "GET /api/shoutouts?after=  logged-in Admin Dashboard users",
+  send: "POST /api/shoutouts  { preset?, emoji?, text? }  Dashboard admin · 1 / 5 min · no sound",
+} as const;
+
 export const MURRAY_MEDIA_ID = "66666666-6666-6666-6666-666666666601";
