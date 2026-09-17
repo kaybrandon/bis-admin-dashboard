@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  // IIS web.config and other static files in public/ copy into dist/
+  publicDir: "public",
   server: {
     port: 5173,
     proxy: {
