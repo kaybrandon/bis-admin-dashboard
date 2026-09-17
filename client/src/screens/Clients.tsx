@@ -428,7 +428,7 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
                   <button className="btn p" onClick={addAddr}>Save address</button>
                 </div>
               )}
-              {file.addresses.map(a => (
+              {[...file.addresses].sort((a, b) => (a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1)).map(a => (
                 <div className="loc" key={a.id}>
                   <div>
                     <strong>{a.label}</strong>
@@ -449,7 +449,7 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
           <div className="card mod client-file-side">
             <div className="mod-h"><h2>Services</h2></div>
             <p className="muted" style={{ marginBottom: 8 }}>What they pay BIS for.</p>
-            {file.services.map(s => (
+            {[...file.services].sort((a, b) => (a.on === b.on ? (a.name || "").localeCompare(b.name || "") : a.on ? -1 : 1)).map(s => (
               <div className="row" key={s.id}>
                 <div><strong>{s.name || "Service"}</strong>{s.note && <div className="muted">{s.note}</div>}</div>
                 <span className={"chip" + (s.on ? " on" : "")}>{s.on ? "On" : "Off"}</span>
