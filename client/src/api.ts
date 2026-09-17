@@ -32,13 +32,16 @@ export function setToken(t: string | null) {
   else sessionStorage.removeItem(TOKEN_KEY);
 }
 
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ?? "";
+
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type") && init.body && !(init.body instanceof FormData))
     headers.set("Content-Type", "application/json");
   const t = token();
   if (t) headers.set("Authorization", `Bearer ${t}`);
-  const res = await fetch(path, { ...init, headers });
+  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const res = await fetch(url, { ...init, headers });
   if (res.status === 401) {
     setToken(null);
     if (!path.includes("/auth/login")) window.location.href = "/login";
