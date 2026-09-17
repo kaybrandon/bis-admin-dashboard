@@ -64,6 +64,18 @@ Murray Media id: `66666666-6666-6666-6666-666666666601`
 
 Archived flags hide on the client file. After 90 days they are purged and cannot be restored.
 
+## Filters (P8)
+
+| Surface | Query |
+|---|---|
+| My Time | `GET /api/time?from=&to=&q=` — `from`/`to` = `yyyy-MM-dd` Chicago; `q` searches punch **notes** |
+| Audit | `GET /api/audit?from=&to=&q=&action=&actor=&objectType=&actorId=&clientId=` — time range, search bar, column filters. Revert only; no delete |
+| @Mentions | `GET /api/mentions?name=&from=&to=` — empty `name` = tagged me; `name` matches mentioned person |
+| Kudos | `GET /api/kudos?name=&from=&to=` — name on from/to; latest respects range |
+| Reports | `GET /api/reports?from=&to=` (default this week) · `GET /api/reports/pdf?from=&to=` — **PDF**, no vault |
+
+Staff: 403 on reports / audit / PDF. Vault secrets never in PDF, print, export, or audit.
+
 ## RBAC (server)
 
 Staff: clients, vault reveal, flags, team, own time, #Post It, kudos, mentions, print (no secrets).  

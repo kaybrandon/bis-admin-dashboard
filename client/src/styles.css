@@ -200,6 +200,10 @@ body[data-role="staff"] .admin-only{display:none!important}
 .print-sheet h2{font-size:14px;margin:18px 0 8px}
 .th-sort{cursor:pointer}
 .th-sort:hover{color:var(--ink)}
+.filter-lbl{display:flex;flex-direction:column;gap:4px}
+.filter-lbl>span{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.tools .sel[type="date"]{min-width:148px}
+.tools input.sel{min-width:168px}
 .chip.note{background:#ece7de;color:#6d726c}
 .contact .chip{margin-left:6px}
 .identity .chip{margin-right:0}

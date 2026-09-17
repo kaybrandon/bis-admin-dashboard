@@ -161,6 +161,12 @@ export const HomeClientsFlagsApi = {
   archiveFlag: "POST /api/flags/{id}/archive  → purgeAt = now+90d",
   restoreFlag: "POST /api/flags/{id}/restore",
   lookups: "GET /api/lookups  → counties, flagLevels, services, departments",
+  myTime: "GET /api/time?from=&to=&q=  (q = search notes)",
+  audit: "GET /api/audit?from=&to=&q=&action=&actor=&objectType=",
+  mentions: "GET /api/mentions?name=&from=&to=",
+  kudos: "GET /api/kudos?name=&from=&to=",
+  reports: "GET /api/reports?from=&to=",
+  reportsPdf: "GET /api/reports/pdf?from=&to=  (no vault)",
 } as const;
 
 export const MURRAY_MEDIA_ID = "66666666-6666-6666-6666-666666666601";

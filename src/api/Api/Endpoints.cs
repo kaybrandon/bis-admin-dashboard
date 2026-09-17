@@ -789,23 +789,30 @@ public static class Endpoints
 
     private static void MapTime(RouteGroupBuilder api)
     {
-        api.MapGet("/time", async (HttpContext ctx, AppDbContext db, Guid? userId) =>
+        api.MapGet("/time", async (HttpContext ctx, AppDbContext db, Guid? userId, string? from, string? to, string? q) =>
         {
             var deny = Authz.RequireHumanStaff(ctx);
             if (deny is not null) return deny;
             var actor = Authz.Actor(ctx);
             var uid = actor.IsAdmin && userId is Guid g ? g : actor.Id!.Value;
-            var rows = await db.Punches.Where(p => p.UserId == uid).OrderByDescending(p => p.At).Take(200).ToListAsync();
-            var open = rows.FirstOrDefault();
-            if (open is { Dir: "out" }) open = null;
-            else if (open is { Dir: "in" }) { }
+            var all = await db.Punches.Where(p => p.UserId == uid).OrderByDescending(p => p.At).ToListAsync();
             var weekStart = ChicagoClock.ToUtc(ChicagoClock.WeekStart().ToDateTime(TimeOnly.MinValue));
             var todayStart = ChicagoClock.ToUtc(ChicagoClock.Today.ToDateTime(TimeOnly.MinValue));
+            var rows = FilterByRange(all, from, to);
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var needle = q.Trim().ToLowerInvariant();
+                rows = rows.Where(p => p.Note != null && p.Note.ToLowerInvariant().Contains(needle)).ToList();
+            }
+            rows = rows.Take(200).ToList();
             return Results.Ok(new
             {
                 open = await OpenPunch(db, uid),
-                todayHours = Hours(rows.Where(p => p.At >= todayStart).ToList()),
-                weekHours = Hours(rows.Where(p => p.At >= weekStart).ToList()),
+                todayHours = Hours(all.Where(p => p.At >= todayStart).ToList()),
+                weekHours = Hours(all.Where(p => p.At >= weekStart).ToList()),
+                from,
+                to,
+                q,
                 punches = rows.Select(p => new { p.Id, p.Dir, p.Workplace, p.Destination, p.At, p.Note, p.EditedFrom })
             });
         }).RequireAuthorization();
@@ -869,57 +876,73 @@ public static class Endpoints
             return deny ?? Results.Redirect($"/api/admin/export/{kind}");
         }).RequireAuthorization();
 
-        api.MapGet("/reports", async (HttpContext ctx, AppDbContext db) =>
+        api.MapGet("/reports", async (HttpContext ctx, AppDbContext db, string? from, string? to) =>
         {
             var deny = Authz.RequireAdmin(ctx);
             if (deny is not null) return deny;
-            var weekStart = ChicagoClock.ToUtc(ChicagoClock.WeekStart().ToDateTime(TimeOnly.MinValue));
-            var punches = await db.Punches.Include(p => p.User).ThenInclude(u => u!.Department)
-                .Where(p => p.At >= weekStart && (p.Note == null || !p.Note.Contains("superseded")))
-                .OrderByDescending(p => p.At).ToListAsync();
-            var byUser = punches.GroupBy(p => p.UserId).Select(g =>
+            var slice = await LoadReport(db, from, to);
+            return Results.Ok(slice.Json);
+        }).RequireAuthorization();
+
+        api.MapGet("/reports/pdf", async (HttpContext ctx, AppDbContext db, string? from, string? to) =>
+        {
+            var deny = Authz.RequireAdmin(ctx);
+            if (deny is not null) return deny;
+            var slice = await LoadReport(db, from, to);
+            var lines = new List<string>
             {
-                var u = g.First().User!;
-                var hours = HoursByPlace(g.ToList());
-                return new
-                {
-                    userId = u.Id,
-                    name = u.Name,
-                    dept = u.Department?.Name,
-                    office = hours.GetValueOrDefault("office"),
-                    road = hours.GetValueOrDefault("road"),
-                    home = hours.GetValueOrDefault("home"),
-                    total = hours.Values.Sum()
-                };
-            }).OrderBy(x => x.name).ToList();
-            return Results.Ok(new
-            {
-                weekStart = ChicagoClock.WeekStart(),
-                totals = new
-                {
-                    hours = byUser.Sum(x => x.total),
-                    office = byUser.Sum(x => x.office),
-                    road = byUser.Sum(x => x.road),
-                    home = byUser.Sum(x => x.home)
-                },
-                byPerson = byUser,
-                punches = punches.Take(80).Select(p => new { who = p.User?.Name, p.At, p.Dir, p.Workplace, p.Destination, p.Note })
-            });
+                "BIS Consultants · time for the whole shop",
+                $"From {slice.From:yyyy-MM-dd}  To {slice.To:yyyy-MM-dd}",
+                $"Hours {Math.Round(slice.Hours)}  Office {Math.Round(slice.Office)}  Road {Math.Round(slice.Road)}  Home {Math.Round(slice.Home)}",
+                "",
+                "Name  Dept  Office  Road  Home  Total"
+            };
+            foreach (var r in slice.ByPerson)
+                lines.Add($"{r.Name}  {r.Dept ?? "—"}  {Math.Round(r.Office)}  {Math.Round(r.Road)}  {Math.Round(r.Home)}  {Math.Round(r.Total)}");
+            lines.Add("");
+            lines.Add("Printed from Reports · no vault · no logins");
+            var pdf = SimplePdf.FromLines("Reports", lines);
+            return Results.File(pdf, "application/pdf", "reports.pdf");
         }).RequireAuthorization();
     }
 
     private static void MapAudit(RouteGroupBuilder api)
     {
-        api.MapGet("/audit", async (HttpContext ctx, AppDbContext db, string? action, Guid? actorId, Guid? clientId) =>
+        api.MapGet("/audit", async (HttpContext ctx, AppDbContext db, string? action, Guid? actorId, Guid? clientId, string? from, string? to, string? q, string? actor, string? objectType) =>
         {
             var deny = Authz.RequireAdmin(ctx);
             if (deny is not null) return deny;
-            var q = db.Audits.Include(a => a.Actor).AsQueryable();
-            if (!string.IsNullOrWhiteSpace(action)) q = q.Where(a => a.Action == action);
-            if (actorId is Guid aid) q = q.Where(a => a.ActorId == aid);
-            if (clientId is Guid cid) q = q.Where(a => a.ClientId == cid);
-            var rows = await q.OrderByDescending(a => a.CreatedAt).Take(300).ToListAsync();
-            return Results.Ok(rows.Select(a => new
+            var query = db.Audits.Include(a => a.Actor).AsQueryable();
+            if (!string.IsNullOrWhiteSpace(action)) query = query.Where(a => a.Action == action);
+            if (actorId is Guid aid) query = query.Where(a => a.ActorId == aid);
+            if (clientId is Guid cid) query = query.Where(a => a.ClientId == cid);
+            if (!string.IsNullOrWhiteSpace(objectType)) query = query.Where(a => a.ObjectType == objectType);
+            if (!string.IsNullOrWhiteSpace(actor))
+            {
+                var who = actor.Trim().ToLower();
+                query = query.Where(a => a.Actor != null && a.Actor.Name.ToLower().Contains(who));
+            }
+            if (TryBound(from, to, out var fromUtc, out var toEx))
+            {
+                if (fromUtc is DateTime f) query = query.Where(a => a.CreatedAt >= f);
+                if (toEx is DateTime t) query = query.Where(a => a.CreatedAt < t);
+            }
+            var rows = await query.OrderByDescending(a => a.CreatedAt).Take(400).ToListAsync();
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var needle = q.Trim();
+                rows = rows.Where(a =>
+                    ContainsLoose(a.Actor?.Name, needle) ||
+                    ContainsLoose(a.Action, needle) ||
+                    ContainsLoose(a.ObjectType, needle) ||
+                    ContainsLoose(a.Reason, needle) ||
+                    ContainsLoose(a.ObjectId?.ToString(), needle) ||
+                    ContainsLoose(a.ClientId?.ToString(), needle) ||
+                    ContainsLoose(a.BeforeJson, needle) ||
+                    ContainsLoose(a.AfterJson, needle)
+                ).ToList();
+            }
+            return Results.Ok(rows.Take(300).Select(a => new
             {
                 a.Id, a.Action, a.ObjectType, a.ObjectId, a.ClientId, a.Reason, a.CreatedAt,
                 actor = a.Actor?.Name,
@@ -1080,7 +1103,7 @@ public static class Endpoints
 
     private static void MapKudos(RouteGroupBuilder api)
     {
-        api.MapGet("/kudos", async (HttpContext ctx, AppDbContext db) =>
+        api.MapGet("/kudos", async (HttpContext ctx, AppDbContext db, string? name, string? from, string? to) =>
         {
             var deny = Authz.RequireStaff(ctx);
             if (deny is not null && !Authz.Actor(ctx).IsToken) return deny;
@@ -1089,6 +1112,14 @@ public static class Endpoints
             var all = await db.Kudos.Include(k => k.ToUser).Include(k => k.FromUser).OrderByDescending(k => k.CreatedAt).ToListAsync();
             var users = await db.Users.ToListAsync();
             var weekRows = all.Where(k => k.WeekStart == week).ToList();
+            var latest = FilterByRange(all, from, to, k => k.CreatedAt);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                var needle = name.Trim();
+                latest = latest.Where(k => ContainsLoose(k.ToUser?.Name, needle) || ContainsLoose(k.FromUser?.Name, needle)).ToList();
+            }
+            if (string.IsNullOrWhiteSpace(from) && string.IsNullOrWhiteSpace(to) && string.IsNullOrWhiteSpace(name))
+                latest = weekRows;
             var totals = users.Select(u => new
             {
                 u.Id, u.Name, initials = Maps.Initials(u.Name), avatarColor = u.AvatarColor,
@@ -1098,7 +1129,10 @@ public static class Endpoints
             return Results.Ok(new
             {
                 weekStart = week,
-                latest = weekRows.Select(k => new { k.Id, k.Body, k.CreatedAt, from = k.FromUser?.Name, to = k.ToUser?.Name }),
+                from,
+                to,
+                name,
+                latest = latest.Take(80).Select(k => new { k.Id, k.Body, k.CreatedAt, from = k.FromUser?.Name, to = k.ToUser?.Name }),
                 totals
             });
         }).RequireAuthorization();
@@ -1123,13 +1157,26 @@ public static class Endpoints
 
     private static void MapMentions(RouteGroupBuilder api)
     {
-        api.MapGet("/mentions", async (HttpContext ctx, AppDbContext db) =>
+        api.MapGet("/mentions", async (HttpContext ctx, AppDbContext db, string? name, string? from, string? to) =>
         {
             var deny = Authz.RequireHumanStaff(ctx);
             if (deny is not null) return deny;
             var uid = Authz.Actor(ctx).Id!.Value;
-            var rows = await db.Mentions.Where(m => m.UserId == uid).OrderByDescending(m => m.CreatedAt).Take(100).ToListAsync();
-            return Results.Ok(rows.Select(m => new { m.Id, m.SourceType, m.SourceId, m.Snippet, m.CreatedAt }));
+            var query = db.Mentions.Include(m => m.User).AsQueryable();
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                var needle = name.Trim().ToLower();
+                query = query.Where(m => m.User != null && m.User.Name.ToLower().Contains(needle));
+            }
+            else
+                query = query.Where(m => m.UserId == uid);
+            if (TryBound(from, to, out var fromUtc, out var toEx))
+            {
+                if (fromUtc is DateTime f) query = query.Where(m => m.CreatedAt >= f);
+                if (toEx is DateTime t) query = query.Where(m => m.CreatedAt < t);
+            }
+            var rows = await query.OrderByDescending(m => m.CreatedAt).Take(100).ToListAsync();
+            return Results.Ok(rows.Select(m => new { m.Id, m.SourceType, m.SourceId, m.Snippet, m.CreatedAt, name = m.User?.Name, userId = m.UserId }));
         }).RequireAuthorization();
 
         api.MapPost("/mentions", async (HttpContext ctx, MentionCreateRequest req, AppDbContext db, AuditWriter audit) =>
@@ -1537,6 +1584,110 @@ public static class Endpoints
         db.Flags.RemoveRange(due);
         await db.SaveChangesAsync();
     }
+
+    private sealed record ReportPerson(Guid UserId, string Name, string? Dept, double Office, double Road, double Home, double Total);
+
+    private sealed record ReportSlice(
+        DateOnly From,
+        DateOnly To,
+        double Hours,
+        double Office,
+        double Road,
+        double Home,
+        IReadOnlyList<ReportPerson> ByPerson,
+        object Json);
+
+    private static async Task<ReportSlice> LoadReport(AppDbContext db, string? from, string? to)
+    {
+        var (fromDay, toDay, fromUtc, toEx) = ReportRange(from, to);
+        var punches = await db.Punches.Include(p => p.User).ThenInclude(u => u!.Department)
+            .Where(p => p.At >= fromUtc && p.At < toEx && (p.Note == null || !p.Note.Contains("superseded")))
+            .OrderByDescending(p => p.At).ToListAsync();
+        var byUser = punches.GroupBy(p => p.UserId).Select(g =>
+        {
+            var u = g.First().User!;
+            var hours = HoursByPlace(g.ToList());
+            return new ReportPerson(
+                u.Id,
+                u.Name,
+                u.Department?.Name,
+                hours.GetValueOrDefault("office"),
+                hours.GetValueOrDefault("road"),
+                hours.GetValueOrDefault("home"),
+                hours.Values.Sum());
+        }).OrderBy(x => x.Name).ToList();
+        var json = new
+        {
+            weekStart = ChicagoClock.WeekStart(),
+            from = fromDay.ToString("yyyy-MM-dd"),
+            to = toDay.ToString("yyyy-MM-dd"),
+            totals = new
+            {
+                hours = byUser.Sum(x => x.Total),
+                office = byUser.Sum(x => x.Office),
+                road = byUser.Sum(x => x.Road),
+                home = byUser.Sum(x => x.Home)
+            },
+            byPerson = byUser.Select(r => new
+            {
+                userId = r.UserId,
+                name = r.Name,
+                dept = r.Dept,
+                office = r.Office,
+                road = r.Road,
+                home = r.Home,
+                total = r.Total
+            }),
+            punches = punches.Take(80).Select(p => new { who = p.User?.Name, p.At, p.Dir, p.Workplace, p.Destination, p.Note })
+        };
+        return new ReportSlice(fromDay, toDay, json.totals.hours, json.totals.office, json.totals.road, json.totals.home, byUser, json);
+    }
+
+    private static (DateOnly From, DateOnly To, DateTime FromUtc, DateTime ToExclusive) ReportRange(string? from, string? to)
+    {
+        DateOnly fromDay;
+        DateOnly toDay;
+        if (string.IsNullOrWhiteSpace(from) && string.IsNullOrWhiteSpace(to))
+        {
+            fromDay = ChicagoClock.WeekStart();
+            toDay = ChicagoClock.WeekEnd(fromDay);
+        }
+        else
+        {
+            fromDay = DateOnly.TryParse(from, out var f) ? f : ChicagoClock.WeekStart();
+            toDay = DateOnly.TryParse(to, out var t) ? t : ChicagoClock.Today;
+            if (toDay < fromDay) (fromDay, toDay) = (toDay, fromDay);
+        }
+        return (fromDay, toDay,
+            ChicagoClock.ToUtc(fromDay.ToDateTime(TimeOnly.MinValue)),
+            ChicagoClock.ToUtc(toDay.AddDays(1).ToDateTime(TimeOnly.MinValue)));
+    }
+
+    private static bool TryBound(string? from, string? to, out DateTime? fromUtc, out DateTime? toExclusive)
+    {
+        fromUtc = null;
+        toExclusive = null;
+        if (DateOnly.TryParse(from, out var f))
+            fromUtc = ChicagoClock.ToUtc(f.ToDateTime(TimeOnly.MinValue));
+        if (DateOnly.TryParse(to, out var t))
+            toExclusive = ChicagoClock.ToUtc(t.AddDays(1).ToDateTime(TimeOnly.MinValue));
+        return fromUtc is not null || toExclusive is not null;
+    }
+
+    private static List<Punch> FilterByRange(IEnumerable<Punch> rows, string? from, string? to) =>
+        FilterByRange(rows, from, to, p => p.At);
+
+    private static List<T> FilterByRange<T>(IEnumerable<T> rows, string? from, string? to, Func<T, DateTime> at)
+    {
+        if (!TryBound(from, to, out var fromUtc, out var toEx)) return rows.ToList();
+        var list = rows;
+        if (fromUtc is DateTime f) list = list.Where(x => at(x) >= f);
+        if (toEx is DateTime t) list = list.Where(x => at(x) < t);
+        return list.ToList();
+    }
+
+    private static bool ContainsLoose(string? hay, string needle) =>
+        !string.IsNullOrWhiteSpace(hay) && hay.Contains(needle, StringComparison.OrdinalIgnoreCase);
 
     private static double Hours(List<Punch> punches)
     {
