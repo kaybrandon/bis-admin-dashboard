@@ -20,6 +20,8 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 - `mentions[]` `{ userId, name, count }`
 - `kudosTop[]` `{ userId, name, initials, avatarColor, stars }` — **1 deed = 1 star**
 - `birthdays[]` — yesterday/today/tomorrow; Maya is seeded in-window
+- `anniversaries[]` — same window on work anniversary (hire / start date); Chris is seeded in-window
+- `celebrations[]` — `{ id, name, initials, kind }` where `kind` is `birthday` or `anniversary`
 
 ## Clients
 

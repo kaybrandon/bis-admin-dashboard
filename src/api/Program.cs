@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text;
 using Bis.Admin.Api.Api;
 using Bis.Admin.Api.Auth;
@@ -106,6 +107,7 @@ using (var scope = app.Services.CreateScope())
     else
         await db.Database.EnsureCreatedAsync();
     await EnsurePostThumbsTableAsync(db);
+    await EnsureWorkAnniversaryColumnAsync(db);
     var files = scope.ServiceProvider.GetRequiredService<FileStore>();
     await SeedData.EnsureAsync(db, vault, app.Configuration, log, files);
 }
@@ -129,6 +131,19 @@ static async Task EnsurePostThumbsTableAsync(AppDbContext db)
     await db.Database.ExecuteSqlRawAsync("""
         CREATE UNIQUE INDEX IF NOT EXISTS IX_PostThumbs_PostId_UserId ON PostThumbs (PostId, UserId);
         """);
+}
+
+static async Task EnsureWorkAnniversaryColumnAsync(AppDbContext db)
+{
+    if (!db.Database.IsSqlite()) return;
+    var connection = db.Database.GetDbConnection();
+    if (connection.State != ConnectionState.Open)
+        await connection.OpenAsync();
+    await using var cmd = connection.CreateCommand();
+    cmd.CommandText = "SELECT 1 FROM pragma_table_info('Users') WHERE name = 'WorkAnniversary'";
+    var exists = await cmd.ExecuteScalarAsync();
+    if (exists is null)
+        await db.Database.ExecuteSqlRawAsync("ALTER TABLE Users ADD COLUMN WorkAnniversary TEXT");
 }
 
 public partial class Program { }

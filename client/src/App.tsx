@@ -306,11 +306,16 @@ function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
   const [bMonth, setBMonth] = useState("");
   const [bDay, setBDay] = useState("");
   const [bYear, setBYear] = useState("");
+  const [aMonth, setAMonth] = useState("");
+  const [aDay, setADay] = useState("");
+  const [aYear, setAYear] = useState("");
   useEffect(() => {
     api<any>("/api/team/" + id).then(row => {
       setU(row);
-      const p = splitBirthday(row.birthday);
+      const p = splitDate(row.birthday);
       setBMonth(p.month); setBDay(p.day); setBYear(p.year);
+      const a = splitDate(row.workAnniversary);
+      setAMonth(a.month); setADay(a.day); setAYear(a.year);
     });
   }, [id]);
   if (!u) return <p>Loading…</p>;
@@ -338,15 +343,23 @@ function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
           <div className="row"><span className="muted">Email</span><a href={"mailto:" + u.email}>{u.email}</a></div>
           {admin ? (
             <div style={{ marginTop: 12 }}>
-              <BirthdayFields month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
+              <DateFields label="Birthday" month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
               <button className="btn s" onClick={async () => {
                 const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(birthdayPayload(bMonth, bDay, bYear)) });
                 setU(saved); toast("Birthday saved");
               }}>Save birthday</button>
+              <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
+              <button className="btn s" onClick={async () => {
+                const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(anniversaryPayload(aMonth, aDay, aYear)) });
+                setU(saved); toast("Work anniversary saved");
+              }}>Save work anniversary</button>
             </div>
-          ) : u.birthday ? (
-            <div className="row"><span className="muted">Birthday</span><strong>{formatBirthday(u.birthday)}</strong></div>
-          ) : null}
+          ) : (
+            <>
+              {u.birthday ? <div className="row"><span className="muted">Birthday</span><strong>{formatDate(u.birthday)}</strong></div> : null}
+              {u.workAnniversary ? <div className="row"><span className="muted">Work anniversary</span><strong>{formatDate(u.workAnniversary)}</strong></div> : null}
+            </>
+          )}
         </div>
         <div className="card mod">
           <div className="mod-h"><h2>Work</h2></div>
@@ -367,7 +380,8 @@ function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
 }
 
 function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; toast: ToastFn }) {
-  const initialBday = splitBirthday(user.birthday);
+  const initialBday = splitDate(user.birthday);
+  const initialAnn = splitDate(user.workAnniversary);
   const [name, setName] = useState(user.name);
   const [mobile, setMobile] = useState(user.phoneMobile || "");
   const [work, setWork] = useState(user.phoneWork || "");
@@ -375,11 +389,14 @@ function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; 
   const [bMonth, setBMonth] = useState(initialBday.month);
   const [bDay, setBDay] = useState(initialBday.day);
   const [bYear, setBYear] = useState(initialBday.year);
+  const [aMonth, setAMonth] = useState(initialAnn.month);
+  const [aDay, setADay] = useState(initialAnn.day);
+  const [aYear, setAYear] = useState(initialAnn.year);
   return (
     <section>
       <div className="h"><div><h1>My profile</h1><p>Your Admin user · not a client contact</p></div>
         <button className="btn p" onClick={async () => {
-          const u = await api<User>("/api/me", { method: "PUT", body: JSON.stringify({ name, phoneMobile: mobile, phoneWork: work, ext, ...birthdayPayload(bMonth, bDay, bYear) }) });
+          const u = await api<User>("/api/me", { method: "PUT", body: JSON.stringify({ name, phoneMobile: mobile, phoneWork: work, ext, ...birthdayPayload(bMonth, bDay, bYear), ...anniversaryPayload(aMonth, aDay, aYear) }) });
           setUser(u); toast("Saved");
         }}>Save</button>
       </div>
@@ -392,7 +409,8 @@ function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; 
           <label className="muted">Mobile</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={mobile} onChange={e => setMobile(e.target.value)} />
           <label className="muted">Work phone</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={work} onChange={e => setWork(e.target.value)} />
           <label className="muted">Extension</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={ext} onChange={e => setExt(e.target.value)} />
-          <BirthdayFields month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
+          <DateFields label="Birthday" month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
+          <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
         </div>
         <div className="card mod span2">
           <div className="mod-h"><h2>Work</h2></div>
@@ -754,7 +772,7 @@ function Settings({ admin }: { admin: boolean }) {
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-function splitBirthday(iso?: string | null) {
+function splitDate(iso?: string | null) {
   if (!iso) return { month: "", day: "", year: "" };
   const [y, m, d] = String(iso).slice(0, 10).split("-");
   if (!m || !d) return { month: "", day: "", year: "" };
@@ -764,31 +782,35 @@ function birthdayPayload(month: string, day: string, year: string) {
   if (!month || !day) return { clearBirthday: true };
   return { birthdayMonth: Number(month), birthdayDay: Number(day), birthdayYear: year.trim() ? Number(year) : undefined, clearBirthday: false };
 }
-function formatBirthday(iso: string) {
-  const p = splitBirthday(iso);
+function anniversaryPayload(month: string, day: string, year: string) {
+  if (!month || !day) return { clearWorkAnniversary: true };
+  return { workAnniversaryMonth: Number(month), workAnniversaryDay: Number(day), workAnniversaryYear: year.trim() ? Number(year) : undefined, clearWorkAnniversary: false };
+}
+function formatDate(iso: string) {
+  const p = splitDate(iso);
   if (!p.month || !p.day) return iso;
   const label = `${MONTHS[Number(p.month) - 1]} ${Number(p.day)}`;
   return p.year ? `${label}, ${p.year}` : label;
 }
-function BirthdayFields({ month, day, year, setMonth, setDay, setYear }: {
-  month: string; day: string; year: string;
+function DateFields({ label, hint, month, day, year, setMonth, setDay, setYear }: {
+  label: string; hint?: string; month: string; day: string; year: string;
   setMonth: (v: string) => void; setDay: (v: string) => void; setYear: (v: string) => void;
 }) {
   return (
     <>
-      <label className="muted">Birthday</label>
+      <label className="muted">{label}</label>
       <div className="bday-row">
-        <select className="sel" value={month} onChange={e => setMonth(e.target.value)} aria-label="Birthday month">
+        <select className="sel" value={month} onChange={e => setMonth(e.target.value)} aria-label={label + " month"}>
           <option value="">Month</option>
           {MONTHS.map((n, i) => <option key={n} value={String(i + 1)}>{n}</option>)}
         </select>
-        <select className="sel" value={day} onChange={e => setDay(e.target.value)} aria-label="Birthday day">
+        <select className="sel" value={day} onChange={e => setDay(e.target.value)} aria-label={label + " day"}>
           <option value="">Day</option>
           {Array.from({ length: 31 }, (_, i) => <option key={i + 1} value={String(i + 1)}>{i + 1}</option>)}
         </select>
-        <input className="sel" inputMode="numeric" placeholder="Year (optional)" value={year} onChange={e => setYear(e.target.value)} aria-label="Birthday year" />
+        <input className="sel" inputMode="numeric" placeholder="Year (optional)" value={year} onChange={e => setYear(e.target.value)} aria-label={label + " year"} />
       </div>
-      <p className="muted" style={{ marginBottom: 12 }}>Month and day are enough. Year is optional.</p>
+      <p className="muted" style={{ marginBottom: 12 }}>{hint || "Month and day are enough. Year is optional."}</p>
     </>
   );
 }

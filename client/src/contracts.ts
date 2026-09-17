@@ -15,6 +15,8 @@ export type HomeBoard = {
   mentions: { userId: string; name: string; count: number }[];
   kudosTop: { userId: string; name?: string; initials: string; avatarColor?: string; stars: number }[];
   birthdays: { id: string; name: string; initials: string }[];
+  anniversaries: { id: string; name: string; initials: string }[];
+  celebrations: { id: string; name: string; initials: string; kind: "birthday" | "anniversary" | string }[];
 };
 
 export type HomePost = {
