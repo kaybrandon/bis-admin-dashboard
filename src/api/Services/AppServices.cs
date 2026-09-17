@@ -120,9 +120,65 @@ public class FileStore
             var dl = await blob.DownloadStreamingAsync(cancellationToken: ct);
             return (dl.Value.Content, mime);
         }
-        var path = Path.Combine(_env.ContentRootPath, "data", container, key.Replace('/', Path.DirectorySeparatorChar));
+        var path = LocalPath(key);
         if (!File.Exists(path)) return null;
         return (File.OpenRead(path), mime);
+    }
+
+    public async Task EnsureSeedBlobsAsync(AppDbContext db, CancellationToken ct = default)
+    {
+        var atts = await db.Attachments.ToListAsync(ct);
+        foreach (var att in atts)
+        {
+            var payload = Placeholder(att);
+            await WriteIfMissingAsync(att.BlobKey, payload, att.Mime, ct);
+            if (att.Bytes != payload.Length)
+                att.Bytes = payload.Length;
+        }
+        if (db.ChangeTracker.HasChanges())
+            await db.SaveChangesAsync(ct);
+    }
+
+    public async Task WriteIfMissingAsync(string key, byte[] payload, string mime, CancellationToken ct = default)
+    {
+        var container = _config["BLOB_CONTAINER"] ?? "files";
+        var conn = _config["Blob:ConnectionString"] ?? _config["AZURE_STORAGE_CONNECTION_STRING"];
+        if (!string.IsNullOrWhiteSpace(conn))
+        {
+            var client = new BlobContainerClient(conn, container);
+            await client.CreateIfNotExistsAsync(PublicAccessType.None, cancellationToken: ct);
+            var blob = client.GetBlobClient(key);
+            if (!await blob.ExistsAsync(ct))
+            {
+                await blob.UploadAsync(new BinaryData(payload), new BlobUploadOptions
+                {
+                    HttpHeaders = new BlobHttpHeaders { ContentType = mime }
+                }, ct);
+            }
+            return;
+        }
+        var path = LocalPath(key);
+        if (File.Exists(path)) return;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllBytesAsync(path, payload, ct);
+    }
+
+    private string LocalPath(string key)
+    {
+        var container = _config["BLOB_CONTAINER"] ?? "files";
+        return Path.Combine(_env.ContentRootPath, "data", container, key.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    private static byte[] Placeholder(Attachment att)
+    {
+        if ((att.Mime ?? "").Contains("pdf", StringComparison.OrdinalIgnoreCase) ||
+            (att.Name ?? "").EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            var label = (att.Name ?? "document").Replace("\\", " ").Replace("(", " ").Replace(")", " ");
+            var pdf = $"%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R>>endobj\n4 0 obj<</Length 68>>stream\nBT /F1 12 Tf 72 720 Td (BIS Admin seed · {label}) Tj ET\nendstream\nendobj\ntrailer<</Root 1 0 R>>\n%%EOF\n";
+            return Encoding.ASCII.GetBytes(pdf);
+        }
+        return Encoding.UTF8.GetBytes("BIS Admin seed placeholder — not a secret\n" + (att.Name ?? "file") + "\n");
     }
 
     private static byte[] Compress(byte[] input)

@@ -31,6 +31,7 @@ public static class Endpoints
         MapMentions(api);
         MapAdmin(api);
         MapFiles(api);
+        app.MapGet("/files/{id:guid}", DownloadFile).RequireAuthorization();
     }
 
     private static void MapAuth(RouteGroupBuilder api)
@@ -132,7 +133,7 @@ public static class Endpoints
             var opens = await db.Flags.CountAsync(f => f.ArchivedAt == null);
             var punches = await db.Punches.Where(p => p.At >= weekStartUtc).ToListAsync();
             var openByUser = punches.GroupBy(p => p.UserId).Select(g => g.OrderByDescending(p => p.At).First()).Where(p => p.Dir == "in").ToList();
-            var kudos = await db.Kudos.Include(k => k.ToUser).Where(k => k.WeekStart == week).ToListAsync();
+            var kudos = await db.Kudos.Include(k => k.ToUser).Include(k => k.FromUser).Where(k => k.WeekStart == week).ToListAsync();
             var top = kudos.GroupBy(k => k.ToUserId).Select(g => new
             {
                 userId = g.Key,
@@ -149,11 +150,12 @@ public static class Endpoints
             var birthdays = await db.Users.Where(u => u.BirthdayInWindowOverride || u.Birthday != null).ToListAsync();
             var inWindow = birthdays.Where(u => u.BirthdayInWindowOverride || (u.Birthday is DateOnly b && ChicagoClock.InBirthdayWindow(b, ChicagoClock.Today)))
                 .Select(u => new { u.Id, u.Name, initials = Maps.Initials(u.Name) }).ToList();
-            var star = kudos.OrderByDescending(k => k.CreatedAt).FirstOrDefault();
+            var star = kudos.Where(k => k.FromUserId != Guid.Empty && k.ToUserId != Guid.Empty)
+                .OrderByDescending(k => k.CreatedAt).FirstOrDefault();
             return Results.Ok(new
             {
-                weekStart = week,
-                weekEnd = ChicagoClock.WeekEnd(week),
+                weekStart = week.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                weekEnd = ChicagoClock.WeekEnd(week).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 weekLabel = ChicagoClock.WeekLabel(),
                 tz = "America/Chicago",
                 stats = new
@@ -169,7 +171,7 @@ public static class Endpoints
                     author = p.CreatedBy?.Name,
                     comments = p.Comments.OrderBy(c => c.CreatedAt).Select(c => new { c.Id, c.Body, author = c.CreatedBy?.Name, c.CreatedAt })
                 }),
-                starOfDay = star is null ? null : new { to = star.ToUser?.Name, star.Body, from = star.FromUserId },
+                starOfDay = star is null ? null : new { to = star.ToUser?.Name, body = star.Body, from = star.FromUserId },
                 mentions = mentionBars,
                 kudosTop = top,
                 birthdays = inWindow
@@ -179,15 +181,25 @@ public static class Endpoints
 
     private static void MapClients(RouteGroupBuilder api)
     {
-        api.MapGet("/clients", async (HttpContext ctx, AppDbContext db, string? industry, string? county, string? status, string? q) =>
+        api.MapGet("/clients", async (HttpContext ctx, AppDbContext db, string? industry, string? county, string? status, string? q, string? service, string? serviceId) =>
         {
             var deny = Authz.RequireStaff(ctx);
             if (deny is not null && !Authz.Actor(ctx).IsToken) return deny;
-            var list = await db.Clients.Include(c => c.People).Include(c => c.Addresses).AsNoTracking().ToListAsync();
+            var list = await db.Clients.Include(c => c.People).Include(c => c.Addresses)
+                .Include(c => c.Services).ThenInclude(s => s.ServiceType)
+                .AsNoTracking().ToListAsync();
             IEnumerable<Client> filtered = list;
             if (!string.IsNullOrWhiteSpace(industry)) filtered = filtered.Where(c => c.Industry == industry);
             if (!string.IsNullOrWhiteSpace(county)) filtered = filtered.Where(c => c.County == county);
             if (!string.IsNullOrWhiteSpace(status)) filtered = filtered.Where(c => c.Status == status);
+            var serviceFilter = serviceId ?? service;
+            if (!string.IsNullOrWhiteSpace(serviceFilter))
+            {
+                filtered = filtered.Where(c => c.Services.Any(s =>
+                    s.On && (
+                        string.Equals(s.ServiceType?.Name, serviceFilter, StringComparison.OrdinalIgnoreCase) ||
+                        s.ServiceTypeId.ToString().Equals(serviceFilter, StringComparison.OrdinalIgnoreCase))));
+            }
             if (!string.IsNullOrWhiteSpace(q))
                 filtered = filtered.Where(c =>
                     c.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
@@ -1006,16 +1018,7 @@ public static class Endpoints
             return Results.Ok(new { att.Id, att.Name, att.Mime, att.Bytes, att.Kind });
         }).RequireAuthorization();
 
-        api.MapGet("/files/{id:guid}", async (HttpContext ctx, Guid id, AppDbContext db, FileStore store) =>
-        {
-            var deny = Authz.RequireStaff(ctx);
-            if (deny is not null && !Authz.Actor(ctx).IsToken) return deny;
-            var att = await db.Attachments.FirstOrDefaultAsync(a => a.Id == id);
-            if (att is null) return Results.NotFound();
-            var opened = await store.OpenAsync(att.BlobKey, att.Mime, ctx.RequestAborted);
-            if (opened is null) return Results.NotFound();
-            return Results.File(opened.Value.Stream, opened.Value.Mime, att.Name);
-        }).RequireAuthorization();
+        api.MapGet("/files/{id:guid}", DownloadFile).RequireAuthorization();
 
         api.MapGet("/lookups", async (HttpContext ctx, AppDbContext db, IConfiguration cfg) =>
         {
@@ -1137,5 +1140,16 @@ public static class Endpoints
         v ??= "";
         if (v.Contains(',') || v.Contains('"') || v.Contains('\n')) return "\"" + v.Replace("\"", "\"\"") + "\"";
         return v;
+    }
+
+    private static async Task<IResult> DownloadFile(HttpContext ctx, Guid id, AppDbContext db, FileStore store)
+    {
+        var deny = Authz.RequireStaff(ctx);
+        if (deny is not null && !Authz.Actor(ctx).IsToken) return deny;
+        var att = await db.Attachments.FirstOrDefaultAsync(a => a.Id == id);
+        if (att is null) return Results.NotFound();
+        var opened = await store.OpenAsync(att.BlobKey, att.Mime, ctx.RequestAborted);
+        if (opened is null) return Results.NotFound();
+        return Results.File(opened.Value.Stream, opened.Value.Mime, att.Name);
     }
 }

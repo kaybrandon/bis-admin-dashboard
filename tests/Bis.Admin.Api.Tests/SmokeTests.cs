@@ -126,6 +126,40 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Home_weekLabel_starOfDay_guid_clients_service_and_seed_files()
+    {
+        var client = _factory.CreateClient();
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var home = await client.GetFromJsonAsync<JsonElement>("/api/home");
+        var label = home.GetProperty("weekLabel").GetString();
+        Assert.Contains("America/Chicago", label);
+        Assert.DoesNotMatch(@"\d{1,2}/\d{1,2}/\d{4}", label);
+        Assert.Matches(@"^[A-Z][a-z]{2} \d{1,2}–", label);
+        var weekStart = home.GetProperty("weekStart").GetString();
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", weekStart);
+        var star = home.GetProperty("starOfDay");
+        Assert.Equal(JsonValueKind.Object, star.ValueKind);
+        Assert.True(Guid.TryParse(star.GetProperty("from").GetString(), out var from));
+        Assert.NotEqual(Guid.Empty, from);
+
+        var mit = await client.GetFromJsonAsync<JsonElement>("/api/clients?service=Managed%20IT");
+        Assert.Contains(mit.EnumerateArray(), c => c.GetProperty("name").GetString() == "Murray Media");
+        var none = await client.GetFromJsonAsync<JsonElement>("/api/clients?service=No-Such-Service");
+        Assert.Equal(0, none.GetArrayLength());
+
+        var file = await client.GetFromJsonAsync<JsonElement>("/api/clients/66666666-6666-6666-6666-666666666601");
+        Assert.True(file.GetProperty("files").GetArrayLength() >= 1);
+        var fileId = file.GetProperty("files")[0].GetProperty("id").GetString();
+        var dl = await client.GetAsync("/files/" + fileId);
+        Assert.Equal(HttpStatusCode.OK, dl.StatusCode);
+        Assert.True((await dl.Content.ReadAsByteArrayAsync()).Length > 0);
+        var dlApi = await client.GetAsync("/api/files/" + fileId);
+        Assert.Equal(HttpStatusCode.OK, dlApi.StatusCode);
+    }
+
+    [Fact]
     public async Task Murray_media_seed_is_complete()
     {
         var client = _factory.CreateClient();

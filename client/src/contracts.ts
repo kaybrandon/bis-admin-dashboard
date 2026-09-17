@@ -124,7 +124,7 @@ export type Lookups = {
 
 export const HomeClientsFlagsApi = {
   home: "GET /api/home",
-  clients: "GET /api/clients?industry=&county=&status=&q=",
+  clients: "GET /api/clients?industry=&county=&status=&q=&service=",
   createClient: "POST /api/clients  { name, industry?, status?, county?, businessPhone?, businessEmail?, website? }",
   clientFile: "GET /api/clients/{id}",
   print: "GET /api/clients/{id}/print  (no vault, no care flags)",

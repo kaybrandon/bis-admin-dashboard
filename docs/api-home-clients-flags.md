@@ -13,10 +13,10 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 
 `GET /api/home` → `HomeBoardDto`
 
-- `weekStart` / `weekEnd` / `weekLabel` / `tz: "America/Chicago"` (Mon–Sun)
+- `weekStart` / `weekEnd` (`yyyy-MM-dd`) / `weekLabel` (`Sep 14–20 · America/Chicago`) / `tz: "America/Chicago"` (Mon–Sun)
 - `stats.wins | onRoad | inOffice | openFlags`
 - `posts[]` (`kind` win|update, `comments[]`)
-- `starOfDay` `{ to, body, from }` or null
+- `starOfDay` `{ to, body, from }` or null — `from` is a real user GUID (never empty)
 - `mentions[]` `{ userId, name, count }`
 - `kudosTop[]` `{ userId, name, initials, avatarColor, stars }` — **1 deed = 1 star**
 - `birthdays[]` — yesterday/today/tomorrow; Maya is seeded in-window
@@ -25,7 +25,7 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 
 | | |
 |---|---|
-| List | `GET /api/clients?industry=&county=&status=&q=` → `ClientListRowDto[]` |
+| List | `GET /api/clients?industry=&county=&status=&q=&service=` → `ClientListRowDto[]` (`service` = catalog name or id; on services only) |
 | Create | `POST /api/clients` `ClientCreateRequest` → `{ id }` |
 | File | `GET /api/clients/{id}` → `ClientFileDto` |
 | Print | `GET /api/clients/{id}/print` — **no vault, no care flags** |
@@ -35,7 +35,7 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 | Vault list | `GET /api/clients/{id}/vault` — `secret` is always `••••••••` |
 | Vault add | `POST /api/clients/{id}/vault` `{ department, title, username?, secret, url?, note? }` |
 | Reveal | `POST /api/clients/{id}/vault/{credId}/reveal` → `{ secret }` human staff only |
-| Files | `POST /api/clients/{id}/files` multipart `file` (images compress) |
+| Files | `POST /api/clients/{id}/files` multipart `file` (images compress) · download `GET /files/{id}` or `GET /api/files/{id}` (JWT) |
 | Lookups | `GET /api/lookups` counties, flagLevels, services, departments |
 
 `business.call` / `email` / `map` / `website` are **business** fields. Never “Call Bre”.

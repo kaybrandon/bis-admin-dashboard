@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Bis.Admin.Api.Services;
 
 public static class ChicagoClock
@@ -44,7 +46,12 @@ public static class ChicagoClock
     {
         var start = WeekStart();
         var end = WeekEnd(start);
-        return $"{start:MMM d}–{end:d} · America/Chicago";
+        var en = CultureInfo.GetCultureInfo("en-US");
+        var left = start.ToString("MMM d", en);
+        var right = end.Month == start.Month
+            ? end.Day.ToString(en)
+            : end.ToString("MMM d", en);
+        return $"{left}–{right} · America/Chicago";
     }
 
     private static TimeZoneInfo Resolve()

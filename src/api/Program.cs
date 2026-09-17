@@ -105,7 +105,8 @@ using (var scope = app.Services.CreateScope())
         await db.Database.MigrateAsync();
     else
         await db.Database.EnsureCreatedAsync();
-    await SeedData.EnsureAsync(db, vault, app.Configuration, log);
+    var files = scope.ServiceProvider.GetRequiredService<FileStore>();
+    await SeedData.EnsureAsync(db, vault, app.Configuration, log, files);
 }
 
 if (args.Contains("--seed-only"))

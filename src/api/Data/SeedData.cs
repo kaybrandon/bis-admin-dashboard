@@ -10,11 +10,12 @@ public static class SeedData
 {
     public const string SeedPassword = "Admin!2026";
 
-    public static async Task EnsureAsync(AppDbContext db, VaultCrypto vault, IConfiguration config, ILogger log)
+    public static async Task EnsureAsync(AppDbContext db, VaultCrypto vault, IConfiguration config, ILogger log, FileStore files)
     {
         if (await db.Users.AnyAsync())
         {
             log.LogInformation("Seed skipped — users already present.");
+            await files.EnsureSeedBlobsAsync(db);
             return;
         }
 
@@ -313,9 +314,9 @@ public static class SeedData
         });
 
         db.Attachments.AddRange(
-            new Attachment { Id = Guid.NewGuid(), ClientId = murray.Id, Kind = "file", Name = "Murray_IT_audit.pdf", BlobKey = "seed/Murray_IT_audit.pdf", Mime = "application/pdf", Bytes = 1_200_000, CreatedAt = now.AddDays(-10) },
-            new Attachment { Id = Guid.NewGuid(), ClientId = murray.Id, Kind = "file", Name = "Scope_of_work.docx", BlobKey = "seed/Scope_of_work.docx", Mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Bytes = 84_000, CreatedAt = now.AddDays(-8) },
-            new Attachment { Id = Guid.NewGuid(), ClientId = murray.Id, Kind = "file", Name = "License_seats.xlsx", BlobKey = "seed/License_seats.xlsx", Mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Bytes = 36_000, CreatedAt = now.AddDays(-7) }
+            new Attachment { Id = Guid.Parse("66666666-6666-6666-6666-6666666666a1"), ClientId = murray.Id, Kind = "file", Name = "Murray_IT_audit.pdf", BlobKey = "seed/Murray_IT_audit.pdf", Mime = "application/pdf", Bytes = 1, CreatedAt = now.AddDays(-10) },
+            new Attachment { Id = Guid.Parse("66666666-6666-6666-6666-6666666666a2"), ClientId = murray.Id, Kind = "file", Name = "Scope_of_work.docx", BlobKey = "seed/Scope_of_work.docx", Mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Bytes = 1, CreatedAt = now.AddDays(-8) },
+            new Attachment { Id = Guid.Parse("66666666-6666-6666-6666-6666666666a3"), ClientId = murray.Id, Kind = "file", Name = "License_seats.xlsx", BlobKey = "seed/License_seats.xlsx", Mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Bytes = 1, CreatedAt = now.AddDays(-7) }
         );
 
         var win = new Post
@@ -443,6 +444,7 @@ public static class SeedData
         });
 
         await db.SaveChangesAsync();
+        await files.EnsureSeedBlobsAsync(db);
         log.LogInformation("Seed complete. Brandon=admin Maya=staff password is the documented seed password (never logged).");
         _ = Encoding.UTF8.GetBytes(SeedPassword); // keep const referenced without logging
     }
