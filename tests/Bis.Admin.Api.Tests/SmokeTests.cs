@@ -194,6 +194,39 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Home_can_add_a_win_edit_update_kudos_star_and_mention()
+    {
+        var client = _factory.CreateClient();
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var win = await client.PostAsJsonAsync("/api/posts", new { kind = "win", title = "Harbor signed", body = "Closed the Harbor kids packet." });
+        win.EnsureSuccessStatusCode();
+
+        var home = await client.GetFromJsonAsync<JsonElement>("/api/home");
+        var update = home.GetProperty("posts").EnumerateArray().First(p => p.GetProperty("kind").GetString() == "update");
+        var updateId = update.GetProperty("id").GetString();
+        var edit = await client.PutAsJsonAsync($"/api/posts/{updateId}", new { title = "Shop closed Friday noon · note", body = "Inventory and trucks. Ping @Brandon if you need the shop open." });
+        edit.EnsureSuccessStatusCode();
+        var afterEdit = await client.GetFromJsonAsync<JsonElement>("/api/home");
+        Assert.Contains(afterEdit.GetProperty("posts").EnumerateArray(), p =>
+            p.GetProperty("id").GetString() == updateId && p.GetProperty("title").GetString()!.Contains("note"));
+
+        var mayaId = Guid.Parse("22222222-2222-2222-2222-222222222202");
+        var kudos = await client.PostAsJsonAsync("/api/kudos", new { toUserId = mayaId, body = "Owned the Harbor walkthrough." });
+        kudos.EnsureSuccessStatusCode();
+        var mention = await client.PostAsJsonAsync("/api/mentions", new { userId = mayaId, snippet = "Need Maya on the Harbor cutover." });
+        mention.EnsureSuccessStatusCode();
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+        var inbox = await client.GetFromJsonAsync<JsonElement>("/api/mentions");
+        Assert.Contains(inbox.EnumerateArray(), m => m.GetProperty("snippet").GetString() == "Need Maya on the Harbor cutover.");
+        var blockedWin = await client.PostAsJsonAsync("/api/posts", new { kind = "win", title = "Nope", body = "Staff cannot post a win." });
+        Assert.Equal(HttpStatusCode.Forbidden, blockedWin.StatusCode);
+    }
+
+    [Fact]
     public async Task Murray_media_seed_is_complete()
     {
         var client = _factory.CreateClient();

@@ -6,6 +6,13 @@ import { firstName, hourWord, mention } from "../screenUtil";
 
 type ToastFn = (m: string) => void;
 type TeamLite = { id: string; name: string };
+type Compose =
+  | { type: "win" }
+  | { type: "update" }
+  | { type: "edit"; post: HomePost }
+  | { type: "kudos" }
+  | { type: "star" }
+  | { type: "mention" };
 
 export function Home({ user, toast }: { user: User; toast: ToastFn }) {
   const [board, setBoard] = useState<HomeBoard | null>(null);
@@ -17,6 +24,7 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
   const [body, setBody] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [celebrateOn, setCelebrateOn] = useState(false);
+  const [compose, setCompose] = useState<Compose | null>(null);
   const admin = user.role === "admin";
 
   const load = () =>
@@ -98,19 +106,29 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
 
       <button type="button" className="card home-card home-celebrate-alert" onClick={() => setCelebrateOn(true)}>
         <div>
-          <strong>Birthdays &amp; anniversaries</strong>
+          <strong>Birthdays / Anniversaries</strong>
           <div className="muted">Yesterday / today / tomorrow · America/Chicago</div>
         </div>
-        <span className="chip on">{celebrations.length === 0 ? "None" : `${celebrations.length} in the window`}</span>
+        <span className="chip on">birthdays / anniversaries</span>
       </button>
 
       <div className="home-grid">
         <article className="card mod home-card home-update accent-update">
-          <FeaturedPost post={featuredUpdate} kind="update" toast={toast} onChange={load} />
+          <FeaturedPost
+            post={featuredUpdate}
+            kind="update"
+            toast={toast}
+            onChange={load}
+            onAdd={() => setCompose({ type: "update" })}
+            onEdit={featuredUpdate ? () => setCompose({ type: "edit", post: featuredUpdate }) : undefined}
+          />
         </article>
 
         <article className="card mod home-card home-star accent-star">
-          <div className="mod-h"><h2>Star of the day</h2><span className="chip">This week</span></div>
+          <div className="mod-h">
+            <h2>Star of the day</h2>
+            <button type="button" className="btn s" onClick={() => setCompose({ type: "star" })}>+</button>
+          </div>
           {board.starOfDay ? (
             <>
               <p><strong>@{firstName(starTo)}</strong> — {board.starOfDay.body}</p>
@@ -122,7 +140,13 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
         </article>
 
         <article className="card mod home-card home-kudos accent-kudos">
-          <div className="mod-h"><h2>Kudos</h2><Link className="btn s" to="/kudos">All</Link></div>
+          <div className="mod-h">
+            <h2>Kudos</h2>
+            <div className="home-card-actions">
+              <button type="button" className="btn s" onClick={() => setCompose({ type: "kudos" })}>+</button>
+              <Link className="btn s" to="/kudos">All</Link>
+            </div>
+          </div>
           {board.kudosTop.length === 0 && <p className="muted">No stars this week yet. One deed = one star.</p>}
           {board.kudosTop.length > 0 && (
             <div className="podium">
@@ -134,7 +158,13 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
         </article>
 
         <article className="card mod home-card home-mentions accent-mentions">
-          <div className="mod-h"><h2>Mentions</h2><Link className="btn s" to="/mentions">Inbox</Link></div>
+          <div className="mod-h">
+            <h2>Mentions</h2>
+            <div className="home-card-actions">
+              <button type="button" className="btn s" onClick={() => setCompose({ type: "mention" })}>+</button>
+              <Link className="btn s" to="/mentions">Inbox</Link>
+            </div>
+          </div>
           {board.mentions.length === 0 && <p className="muted">No @mentions this week.</p>}
           {board.mentions.map(m => (
             <div className="bar-row" key={m.userId}>
@@ -146,7 +176,10 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
         </article>
 
         <article className="card mod home-card home-feed accent-win">
-          <div className="mod-h"><h2>Win Board</h2><span className="muted">{board.tz}</span></div>
+          <div className="mod-h">
+            <h2>Win Board</h2>
+            <button type="button" className="btn s" onClick={() => setCompose({ type: "win" })}>Add a win</button>
+          </div>
           {board.posts.length === 0 && <p className="muted">Nothing on the Win Board yet.</p>}
           {board.posts.map(p => (
             <button type="button" className="row board-row" key={p.id} onClick={() => setOpenId(p.id)}>
@@ -164,7 +197,7 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
         <div className="dlg-scrim" onClick={() => setCelebrateOn(false)}>
           <article className="card mod home-card dlg" onClick={e => e.stopPropagation()}>
             <div className="mod-h">
-              <h2>Birthdays &amp; anniversaries</h2>
+              <h2>Birthdays / Anniversaries</h2>
               <button type="button" className="btn s" onClick={() => setCelebrateOn(false)}>Close</button>
             </div>
             <p className="muted" style={{ marginBottom: 10 }}>Yesterday / today / tomorrow · America/Chicago</p>
@@ -173,9 +206,9 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
               <div className="row" key={`${row.kind}-${row.id}`}>
                 <div>
                   <strong>{row.name}</strong>
-                  <div className="muted">{row.kind === "anniversary" ? "Work anniversary" : "Birthday"}</div>
+                  <div className="muted">{row.kind === "anniversary" ? "Work Anniversary" : "Birthday"}</div>
                 </div>
-                <span className="chip on">{row.kind === "anniversary" ? "Work anniversary" : "Birthday"}</span>
+                <span className="chip on">{row.kind === "anniversary" ? "Work Anniversary" : "Birthday"}</span>
               </div>
             ))}
           </article>
@@ -189,7 +222,103 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
           </article>
         </div>
       )}
+
+      {compose && (
+        <div className="dlg-scrim" onClick={() => setCompose(null)}>
+          <article className="card mod home-card dlg" onClick={e => e.stopPropagation()}>
+            <ComposePanel
+              compose={compose}
+              team={team}
+              toast={toast}
+              onClose={() => setCompose(null)}
+              onDone={() => { setCompose(null); load(); }}
+            />
+          </article>
+        </div>
+      )}
     </section>
+  );
+}
+
+function ComposePanel({ compose, team, toast, onClose, onDone }: {
+  compose: Compose; team: TeamLite[]; toast: ToastFn; onClose: () => void; onDone: () => void;
+}) {
+  const [title, setTitle] = useState(compose.type === "edit" ? (compose.post.title || "") : "");
+  const [body, setBody] = useState(compose.type === "edit" ? compose.post.body : "");
+  const [to, setTo] = useState(team[0]?.id || "");
+
+  useEffect(() => {
+    if (!to && team[0]) setTo(team[0].id);
+  }, [team, to]);
+
+  const heading =
+    compose.type === "win" ? "Add a win"
+    : compose.type === "update" ? "Add"
+    : compose.type === "edit" ? "edit"
+    : compose.type === "star" ? "Star of the day"
+    : compose.type === "kudos" ? "Kudos"
+    : "Mentions";
+
+  const submit = async () => {
+    try {
+      if (compose.type === "win" || compose.type === "update") {
+        if (!title.trim() || !body.trim()) { toast("Title and body needed"); return; }
+        await api("/api/posts", { method: "POST", body: JSON.stringify({ kind: compose.type, title, body }) });
+        toast(compose.type === "win" ? "Win posted" : "Update posted");
+      } else if (compose.type === "edit") {
+        if (!title.trim() || !body.trim()) { toast("Title and body needed"); return; }
+        await api(`/api/posts/${compose.post.id}`, { method: "PUT", body: JSON.stringify({ title, body }) });
+        toast("Update saved");
+      } else if (compose.type === "kudos" || compose.type === "star") {
+        if (!to) { toast("Pick a teammate"); return; }
+        if (!body.trim()) { toast("Name the thing they did"); return; }
+        await api("/api/kudos", { method: "POST", body: JSON.stringify({ toUserId: to, body }) });
+        toast(compose.type === "star" ? "Star set" : "Star given");
+      } else {
+        if (!to) { toast("Pick a teammate"); return; }
+        if (!body.trim()) { toast("Write the mention"); return; }
+        await api("/api/mentions", { method: "POST", body: JSON.stringify({ userId: to, snippet: body }) });
+        toast("Mention added");
+      }
+      onDone();
+    } catch (e) { toast((e as Error).message); }
+  };
+
+  const action =
+    compose.type === "win" ? "Add a win"
+    : compose.type === "update" ? "Add"
+    : compose.type === "edit" ? "edit"
+    : "+";
+
+  const personForm = compose.type === "kudos" || compose.type === "star" || compose.type === "mention";
+
+  return (
+    <>
+      <div className="mod-h">
+        <h2>{heading}</h2>
+        <button type="button" className="btn s" onClick={onClose}>Close</button>
+      </div>
+      {personForm && (
+        <>
+          <label className="muted">To</label>
+          <select className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={to} onChange={e => setTo(e.target.value)}>
+            {team.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </>
+      )}
+      {!personForm && (
+        <input className="sel" style={{ width: "100%", margin: "0 0 10px" }} placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />
+      )}
+      <textarea
+        className="compose"
+        placeholder={personForm
+          ? (compose.type === "mention" ? "What you want them to see." : "One thing they did")
+          : "What happened? @Name mentions land in the inbox."}
+        value={body}
+        onChange={e => setBody(e.target.value)}
+      />
+      <button className="btn p" style={{ marginTop: 10 }} onClick={submit}>{action}</button>
+    </>
   );
 }
 
@@ -234,7 +363,9 @@ function PostDetail({ post, toast, onChange, onClose }: { post: HomePost; toast:
   );
 }
 
-function FeaturedPost({ post, kind, toast, onChange }: { post?: HomePost; kind: "win" | "update"; toast: ToastFn; onChange: () => void }) {
+function FeaturedPost({ post, kind, toast, onChange, onAdd, onEdit }: {
+  post?: HomePost; kind: "win" | "update"; toast: ToastFn; onChange: () => void; onAdd?: () => void; onEdit?: () => void;
+}) {
   const [draft, setDraft] = useState("");
   const win = kind === "win";
   const comment = async () => {
@@ -251,7 +382,11 @@ function FeaturedPost({ post, kind, toast, onChange }: { post?: HomePost; kind: 
     <>
       <div className="mod-h">
         <h2>{win ? "Win" : "Update"}</h2>
-        {post && <span className={"chip" + (win ? " on" : "")}>{post.author || "Shop"}</span>}
+        <div className="home-card-actions">
+          {!win && <button type="button" className="btn s" onClick={onAdd}>Add</button>}
+          {!win && post && <button type="button" className="btn s" onClick={onEdit}>edit</button>}
+          {post && <span className={"chip" + (win ? " on" : "")}>{post.author || "Shop"}</span>}
+        </div>
       </div>
       {!post && <p className="muted">{win ? "No win posted this week yet." : "No update this week."}</p>}
       {post && (

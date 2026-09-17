@@ -970,6 +970,21 @@ public static class Endpoints
             return Results.Ok(new { p.Id });
         }).RequireAuthorization();
 
+        api.MapPut("/posts/{id:guid}", async (HttpContext ctx, Guid id, PostUpdateRequest req, AppDbContext db, AuditWriter audit, MentionService mentions) =>
+        {
+            var deny = Authz.RequireAdmin(ctx);
+            if (deny is not null) return deny;
+            var p = await db.Posts.FirstOrDefaultAsync(x => x.Id == id);
+            if (p is null) return Results.NotFound();
+            var before = new { p.Title, p.Body };
+            if (req.Title is not null) p.Title = req.Title;
+            if (req.Body is not null) p.Body = req.Body;
+            await db.SaveChangesAsync();
+            await mentions.CaptureAsync(db, $"{p.Title} {p.Body}", "post", p.Id, Authz.Actor(ctx).Id, default);
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "post", p.Id, null, before, new { p.Title, p.Body }, null);
+            return Results.Ok(new { p.Id, p.Title, p.Body });
+        }).RequireAuthorization();
+
         api.MapPost("/posts/{id:guid}/comments", async (HttpContext ctx, Guid id, CommentCreateRequest req, AppDbContext db, MentionService mentions) =>
         {
             var deny = Authz.RequireHumanStaff(ctx);
@@ -1115,6 +1130,28 @@ public static class Endpoints
             var uid = Authz.Actor(ctx).Id!.Value;
             var rows = await db.Mentions.Where(m => m.UserId == uid).OrderByDescending(m => m.CreatedAt).Take(100).ToListAsync();
             return Results.Ok(rows.Select(m => new { m.Id, m.SourceType, m.SourceId, m.Snippet, m.CreatedAt }));
+        }).RequireAuthorization();
+
+        api.MapPost("/mentions", async (HttpContext ctx, MentionCreateRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (string.IsNullOrWhiteSpace(req.Snippet)) return Results.BadRequest(new { error = "Write the mention." });
+            if (!await db.Users.AnyAsync(u => u.Id == req.UserId)) return Results.BadRequest(new { error = "Pick a teammate." });
+            var id = Guid.NewGuid();
+            var m = new Mention
+            {
+                Id = id,
+                UserId = req.UserId,
+                SourceType = "mention",
+                SourceId = id,
+                Snippet = req.Snippet.Trim(),
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Mentions.Add(m);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "mention", m.Id, null, null, new { m.UserId, m.Snippet }, null);
+            return Results.Ok(new { m.Id });
         }).RequireAuthorization();
     }
 

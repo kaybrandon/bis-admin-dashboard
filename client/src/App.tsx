@@ -361,16 +361,16 @@ function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
                 const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(birthdayPayload(bMonth, bDay, bYear)) });
                 setU(saved); toast("Birthday saved");
               }}>Save birthday</button>
-              <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
+              <DateFields label="Work Anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
               <button className="btn s" onClick={async () => {
                 const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(anniversaryPayload(aMonth, aDay, aYear)) });
-                setU(saved); toast("Work anniversary saved");
-              }}>Save work anniversary</button>
+                setU(saved); toast("Work Anniversary saved");
+              }}>Save Work Anniversary</button>
             </div>
           ) : (
             <>
               {u.birthday ? <div className="row"><span className="muted">Birthday</span><strong>{formatDate(u.birthday)}</strong></div> : null}
-              {u.workAnniversary ? <div className="row"><span className="muted">Work anniversary</span><strong>{formatDate(u.workAnniversary)}</strong></div> : null}
+              {u.workAnniversary ? <div className="row"><span className="muted">Work Anniversary</span><strong>{formatDate(u.workAnniversary)}</strong></div> : null}
             </>
           )}
         </div>
@@ -423,7 +423,7 @@ function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; 
           <label className="muted">Work phone</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={work} onChange={e => setWork(e.target.value)} />
           <label className="muted">Extension</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={ext} onChange={e => setExt(e.target.value)} />
           <DateFields label="Birthday" month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
-          <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
+          <DateFields label="Work Anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
         </div>
         <div className="card mod span2">
           <div className="mod-h"><h2>Work</h2></div>
