@@ -73,9 +73,22 @@ Locked names:
 | SPA | `app-bis-admin-dashboard` |
 | Blob container | `files` |
 
-Key Vault refs: SQL connection · blob · `BLOB_CONTAINER=files` · `AUTH_SECRET` · `VAULT_DEK` · `APP_BASE_URL`/CORS · `SSO_ENABLED=false`.
-
 HTTPS only. No FTP. SQL is **Entra-only** (no SQL username/password in Bicep).
+
+### Key Vault → App Service env (locked)
+
+CoS secret names are dash-safe. The app still reads `AUTH_SECRET` / `VAULT_DEK` / `BLOB_CONTAINER` / `SSO_ENABLED` / `ConnectionStrings:Default` (plus `StorageConnectionString` for blob).
+
+| Key Vault secret | App Service setting | App reads |
+|---|---|---|
+| `SqlConnectionString` | `ConnectionStrings__Default` | `ConnectionStrings:Default` |
+| `StorageConnectionString` | `StorageConnectionString` | `StorageConnectionString` |
+| `BLOB-CONTAINER` | `BLOB_CONTAINER` | `BLOB_CONTAINER` (`files`) |
+| `SSO-ENABLED` | `SSO_ENABLED` | `SSO_ENABLED` (`false`) |
+| `AUTH-SECRET` | `AUTH_SECRET` | `AUTH_SECRET` |
+| `VAULT-DEK` | `VAULT_DEK` | `VAULT_DEK` (32-byte) |
+
+`APP_BASE_URL` / CORS stay as a regular App Service setting (not a KV secret).
 
 ```bash
 az login
@@ -85,7 +98,7 @@ az account set --subscription <same BIS sub as GIS>
 
 If `az` is missing, the repo still builds and seeds locally. IaC lives in `infra/main.bicep`.
 
-After Azure deploy: put `AUTH_SECRET` and a 32-byte `VAULT_DEK` in Key Vault, wire App Service references, grant the API identity SQL + blob + KV access, then hit the API once to migrate + seed.
+After Azure deploy: `./scripts/deploy-azure.sh` creates `SqlConnectionString`, `StorageConnectionString`, `BLOB-CONTAINER=files`, `SSO-ENABLED=false`, and (if missing) `AUTH-SECRET` + 32-byte `VAULT-DEK`. Grant the API identity SQL + blob + KV Secrets User, then hit the API once to migrate + seed. Do not rotate `VAULT-DEK` after vault rows exist.
 
 ## Repo layout
 

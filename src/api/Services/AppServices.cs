@@ -86,7 +86,7 @@ public class FileStore
             fileName = Path.ChangeExtension(fileName, ".jpg");
         }
         var key = $"{DateTime.UtcNow:yyyy/MM}/{Guid.NewGuid():N}-{Sanitize(fileName)}";
-        var conn = _config["Blob:ConnectionString"] ?? _config["AZURE_STORAGE_CONNECTION_STRING"];
+        var conn = StorageConn();
         if (!string.IsNullOrWhiteSpace(conn))
         {
             var client = new BlobContainerClient(conn, container);
@@ -111,7 +111,7 @@ public class FileStore
     public async Task<(Stream Stream, string Mime)?> OpenAsync(string key, string mime, CancellationToken ct)
     {
         var container = _config["BLOB_CONTAINER"] ?? "files";
-        var conn = _config["Blob:ConnectionString"] ?? _config["AZURE_STORAGE_CONNECTION_STRING"];
+        var conn = StorageConn();
         if (!string.IsNullOrWhiteSpace(conn))
         {
             var client = new BlobContainerClient(conn, container);
@@ -142,7 +142,7 @@ public class FileStore
     public async Task WriteIfMissingAsync(string key, byte[] payload, string mime, CancellationToken ct = default)
     {
         var container = _config["BLOB_CONTAINER"] ?? "files";
-        var conn = _config["Blob:ConnectionString"] ?? _config["AZURE_STORAGE_CONNECTION_STRING"];
+        var conn = StorageConn();
         if (!string.IsNullOrWhiteSpace(conn))
         {
             var client = new BlobContainerClient(conn, container);
@@ -162,6 +162,11 @@ public class FileStore
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllBytesAsync(path, payload, ct);
     }
+
+    private string? StorageConn() =>
+        _config["StorageConnectionString"]
+        ?? _config["Blob:ConnectionString"]
+        ?? _config["AZURE_STORAGE_CONNECTION_STRING"];
 
     private string LocalPath(string key)
     {
