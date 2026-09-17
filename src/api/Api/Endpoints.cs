@@ -129,6 +129,7 @@ public static class Endpoints
             var week = ChicagoClock.WeekStart();
             var weekStartUtc = ChicagoClock.ToUtc(week.ToDateTime(TimeOnly.MinValue));
             var posts = await db.Posts.Include(p => p.CreatedBy).Include(p => p.Comments).ThenInclude(c => c.CreatedBy)
+                .Include(p => p.Thumbs)
                 .Where(p => p.WeekStart == week).OrderByDescending(p => p.CreatedAt).ToListAsync();
             var opens = await db.Flags.CountAsync(f => f.ArchivedAt == null);
             var punches = await db.Punches.Where(p => p.At >= weekStartUtc).ToListAsync();
@@ -169,7 +170,8 @@ public static class Endpoints
                 {
                     p.Id, p.Kind, p.Title, p.Body, p.CreatedAt, p.WeekStart,
                     author = p.CreatedBy?.Name,
-                    comments = p.Comments.OrderBy(c => c.CreatedAt).Select(c => new { c.Id, c.Body, author = c.CreatedBy?.Name, c.CreatedAt })
+                    comments = p.Comments.OrderBy(c => c.CreatedAt).Select(c => new { c.Id, c.Body, author = c.CreatedBy?.Name, c.CreatedAt }),
+                    thumbs = p.Thumbs.Count
                 }),
                 starOfDay = star is null ? null : new { to = star.ToUser?.Name, body = star.Body, from = star.FromUserId },
                 mentions = mentionBars,
@@ -942,11 +944,27 @@ public static class Endpoints
         {
             var deny = Authz.RequireHumanStaff(ctx);
             if (deny is not null) return deny;
+            if (!await db.Posts.AnyAsync(p => p.Id == id)) return Results.NotFound();
             var c = new Comment { Id = Guid.NewGuid(), PostId = id, Body = req.Body, CreatedById = Authz.Actor(ctx).Id!.Value, CreatedAt = DateTime.UtcNow };
             db.Comments.Add(c);
             await db.SaveChangesAsync();
             await mentions.CaptureAsync(db, req.Body, "comment", c.Id, c.CreatedById, default);
             return Results.Ok(new { c.Id });
+        }).RequireAuthorization();
+
+        api.MapPost("/posts/{id:guid}/thumbs", async (HttpContext ctx, Guid id, AppDbContext db) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            if (!await db.Posts.AnyAsync(p => p.Id == id)) return Results.NotFound();
+            var uid = Authz.Actor(ctx).Id!.Value;
+            if (!await db.PostThumbs.AnyAsync(t => t.PostId == id && t.UserId == uid))
+            {
+                db.PostThumbs.Add(new PostThumb { Id = Guid.NewGuid(), PostId = id, UserId = uid, CreatedAt = DateTime.UtcNow });
+                await db.SaveChangesAsync();
+            }
+            var thumbs = await db.PostThumbs.CountAsync(t => t.PostId == id);
+            return Results.Ok(new { thumbs });
         }).RequireAuthorization();
 
         api.MapGet("/stickies", async (HttpContext ctx, AppDbContext db) =>

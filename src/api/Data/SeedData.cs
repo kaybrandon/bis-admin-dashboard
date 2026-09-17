@@ -354,6 +354,11 @@ public static class SeedData
             new Comment { Id = Guid.NewGuid(), PostId = win.Id, Body = "Thank you — felt good to hear it from her.", CreatedById = maya.Id, CreatedAt = now.AddHours(-5) },
             new Comment { Id = Guid.NewGuid(), PostId = win.Id, Body = "Nice work M.", CreatedById = chris.Id, CreatedAt = now.AddHours(-4) }
         );
+        db.PostThumbs.AddRange(
+            new PostThumb { Id = Guid.NewGuid(), PostId = win.Id, UserId = brandon.Id, CreatedAt = now.AddHours(-4) },
+            new PostThumb { Id = Guid.NewGuid(), PostId = win.Id, UserId = chris.Id, CreatedAt = now.AddHours(-3) },
+            new PostThumb { Id = Guid.NewGuid(), PostId = win2.Id, UserId = maya.Id, CreatedAt = now.AddHours(-2) }
+        );
 
         db.Kudos.AddRange(
             new Kudos { Id = Guid.NewGuid(), ToUserId = maya.Id, FromUserId = brandon.Id, Body = "Owned the Northstar on-site.", WeekStart = week, CreatedAt = now.AddHours(-5) },

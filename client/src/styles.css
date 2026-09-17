@@ -144,13 +144,16 @@ body[data-role="staff"] .admin-only{display:none!important}
 .home-card.accent-mentions{border-left-color:var(--accent)}
 .home-card.accent-board{border-left-color:var(--accent)}
 .home-card.accent-win{border-left-color:var(--accent)}
-.home-win .mod-h h2{color:var(--accent)}
+.home-feed .mod-h h2{color:var(--accent)}
 @media(min-width:1100px){
   .home-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .home-win{grid-column:1/-1}
   .home-mentions{grid-column:1/2}
   .home-feed{grid-column:2/-1}
 }
+.board-row{width:100%;border:0;background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.board-row:hover{background:#faf6ef}
+.dlg-scrim{position:fixed;inset:0;background:rgba(18,22,20,.45);z-index:30;display:grid;place-items:center;padding:20px}
+.dlg{max-width:560px;width:100%;max-height:min(80vh,720px);overflow:auto}
 .hero{font-size:20px;letter-spacing:-.03em}
 .comment{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:13.5px}
 .where-pop{position:absolute;right:0;top:calc(100% + 8px);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:8px;min-width:240px;display:none;z-index:20}

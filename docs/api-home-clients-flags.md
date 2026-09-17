@@ -15,7 +15,7 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 
 - `weekStart` / `weekEnd` (`yyyy-MM-dd`) / `weekLabel` (`Sep 14–20 · America/Chicago`) / `tz: "America/Chicago"` (Mon–Sun)
 - `stats.wins | onRoad | inOffice | openFlags`
-- `posts[]` (`kind` win|update, `comments[]`)
+- `posts[]` (`kind` win|update, `comments[]`, `thumbs` count)
 - `starOfDay` `{ to, body, from }` or null — `from` is a real user GUID (never empty)
 - `mentions[]` `{ userId, name, count }`
 - `kudosTop[]` `{ userId, name, initials, avatarColor, stars }` — **1 deed = 1 star**

@@ -30,7 +30,7 @@ public record SettingWriteRequest(string? CompanyName, bool? ShowPresence, int? 
 
 public record HomeStatsDto(int Wins, int OnRoad, int InOffice, int OpenFlags);
 public record HomeCommentDto(Guid Id, string Body, string? Author, DateTime CreatedAt);
-public record HomePostDto(Guid Id, string Kind, string Title, string Body, DateTime CreatedAt, DateOnly WeekStart, string? Author, IEnumerable<HomeCommentDto> Comments);
+public record HomePostDto(Guid Id, string Kind, string Title, string Body, DateTime CreatedAt, DateOnly WeekStart, string? Author, IEnumerable<HomeCommentDto> Comments, int Thumbs);
 public record HomeStarDto(string? To, string Body, Guid From);
 public record HomeMentionBarDto(Guid UserId, string Name, int Count);
 public record HomeKudosTopDto(Guid UserId, string? Name, string Initials, string? AvatarColor, int Stars);
