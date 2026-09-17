@@ -33,6 +33,7 @@ public class AppDbContext : DbContext
     public DbSet<Audit> Audits => Set<Audit>();
     public DbSet<AccessToken> AccessTokens => Set<AccessToken>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
+    public DbSet<Shoutout> Shoutouts => Set<Shoutout>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -87,6 +88,15 @@ public class AppDbContext : DbContext
         {
             e.HasOne(x => x.ToUser).WithMany().HasForeignKey(x => x.ToUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.FromUser).WithMany().HasForeignKey(x => x.FromUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+        model.Entity<Shoutout>(e =>
+        {
+            e.HasOne(x => x.FromUser).WithMany().HasForeignKey(x => x.FromUserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => new { x.FromUserId, x.CreatedAt });
+            e.Property(x => x.Text).HasMaxLength(ShoutoutRules.MaxText);
+            e.Property(x => x.Preset).HasMaxLength(40);
+            e.Property(x => x.Emoji).HasMaxLength(16);
         });
     }
 }

@@ -5,6 +5,8 @@ export type User = {
   name: string;
   email: string;
   role: "staff" | "admin";
+  dashboardAdmin?: boolean;
+  isGlobalAdmin?: boolean;
   title?: string;
   department?: string;
   manager?: string;

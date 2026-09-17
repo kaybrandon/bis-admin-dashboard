@@ -25,7 +25,7 @@ Lane split: this branch owns the **API** (vault/RBAC/audit/auth/seed) and the **
 
 | Name | Email | Role | Manager |
 |------|-------|------|---------|
-| Brandon Kay | brandon@bisconsultants.example | **admin** | — |
+| Brandon Kay | brandon@bisconsultants.example | **admin** (Global Admin) | — |
 | Maya Chen | maya@bisconsultants.example | **staff** | Brandon |
 | Chris Patel | chris@bisconsultants.example | staff | Brandon |
 | Sam Ortiz | sam@bisconsultants.example | staff | Brandon |
@@ -44,15 +44,18 @@ Murray Media: Bre primary/pinned · Scott + Jordan IT · Ronnie + Ana Digital ·
 2. Open Murray Media → business Call/Email/Map/Website (not “Call Bre”) · vault Reveal · flags visible.
 3. Clock in **Road** + destination → punch on Time.
 4. Add a flag · give a kudos star · Mentions if `@` used.
-5. Login Maya → Export / Admin / Reports / Audit **blocked** · own Time OK.
-6. `/health` reachable.
+5. Login Maya → Export / Admin / Reports / Audit **blocked** · own Time OK · **no Shoutout**.
+6. Brandon → Settings / **Roles**: grant/revoke Dashboard administrator persists · cannot self-promote.
+7. Brandon **Shoutout** (Good morning / High five / Congratulations + 😊🙌⭐🎉 + ≤80) → soft toast to logged-in Admin users · auto-dismiss 4–8s · **1 / 5 min** · no sound.
+8. `/health` reachable.
 
 SSO is **built but off** (`SSO_ENABLED=false`). Idle **15 minutes** signs out (and clocks out).
 
 ## RBAC (`staff` | `admin`) — server-enforced
 
 Staff can use the client file, vault reveal/copy, flags, team, own time, #Post It, kudos, mentions, print (no secrets).  
-Admin also gets Reports, Audit, Users/catalog/tokens/settings, and Export.
+Admin also gets Reports, Audit, Users/catalog/tokens/settings, Export, and **Shoutout**.  
+**Global Admin** (bootstrap: Brandon) is the only person who can grant/revoke Dashboard administrator on Settings → Roles. No self-promote.
 
 Access tokens (`adm_ext_…`) are read-only: no vault secrets, no admin routes.
 

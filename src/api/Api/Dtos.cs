@@ -28,6 +28,10 @@ public record TokenCreateRequest(string Name, string? Contact, bool Internal);
 public record RevertRequest(string? Reason);
 public record SettingWriteRequest(string? CompanyName, bool? ShowPresence, int? IdleMinutes, bool? GeofenceOffice, int? ClipboardClearSeconds);
 public record WorkspaceSettingsDto(string CompanyName, int IdleMinutes, int ClipboardClearSeconds);
+public record ShoutoutCreateRequest(string? Preset, string? Emoji, string? Text);
+public record RoleRowDto(Guid Id, string Name, string Email, string Initials, string AvatarColor, bool DashboardAdmin, bool IsGlobalAdmin);
+public record ShoutoutItemDto(Guid Id, string? Preset, string? Emoji, string? Text, string Message, string From, Guid FromUserId, DateTime CreatedAt);
+public record ShoutoutFeedDto(IEnumerable<ShoutoutItemDto> Items, bool CanSend, int CooldownSeconds, string? WaitLabel);
 
 public record HomeStatsDto(int Wins, int OnRoad, int InOffice, int OpenFlags);
 public record HomeCommentDto(Guid Id, string Body, string? Author, DateTime CreatedAt);
@@ -64,6 +68,8 @@ public static class Maps
         u.PhoneWork,
         u.Ext,
         u.Role,
+        dashboardAdmin = u.Role == Roles.Admin,
+        isGlobalAdmin = u.IsGlobalAdmin,
         u.Title,
         departmentId = u.DepartmentId,
         department = u.Department?.Name,
@@ -106,6 +112,32 @@ public static class Maps
         "home" => "Home",
         _ => workplace
     };
+
+    public static ShoutoutItemDto ShoutItem(Shoutout s)
+    {
+        var from = FirstName(s.FromUser?.Name);
+        return new ShoutoutItemDto(s.Id, s.Preset, s.Emoji, s.Text, FormatShout(s.Preset, s.Emoji, s.Text), from, s.FromUserId, s.CreatedAt);
+    }
+
+    public static string FormatShout(string? preset, string? emoji, string? text)
+    {
+        var head = string.Join(" ", new[] { preset, emoji }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        if (!string.IsNullOrWhiteSpace(text))
+            return string.IsNullOrWhiteSpace(head) ? text.Trim() : $"{head} — {text.Trim()}";
+        return head;
+    }
+
+    public static string FirstName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "Admin";
+        return name.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+    }
+
+    public static string WaitLabel(TimeSpan wait)
+    {
+        var s = Math.Max(0, (int)Math.Ceiling(wait.TotalSeconds));
+        return $"Wait {s / 60}:{s % 60:D2}";
+    }
 
     public static object VaultMasked(Credential c) => new
     {

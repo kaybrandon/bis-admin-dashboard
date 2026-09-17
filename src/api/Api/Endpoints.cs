@@ -20,6 +20,8 @@ public static class Endpoints
         var api = app.MapGroup("/api");
         MapAuth(api);
         MapWorkspace(api);
+        MapRoles(api);
+        MapShoutouts(api);
         MapHome(api);
         MapClients(api);
         MapFlags(api);
@@ -129,6 +131,148 @@ public static class Endpoints
             var s = await db.CompanySettings.FirstAsync();
             return Results.Ok(new WorkspaceSettingsDto(s.CompanyName, s.IdleMinutes, s.ClipboardClearSeconds));
         }).RequireAuthorization().WithTags("Settings").Produces<WorkspaceSettingsDto>();
+    }
+
+    private static void MapRoles(RouteGroupBuilder api)
+    {
+        api.MapGet("/roles", async (HttpContext ctx, AppDbContext db) =>
+        {
+            var deny = Authz.RequireStaff(ctx);
+            if (deny is not null && !Authz.Actor(ctx).IsToken) return deny;
+            var users = await db.Users.AsNoTracking().OrderBy(u => u.Name).ToListAsync();
+            return Results.Ok(users.Select(u => new RoleRowDto(
+                u.Id, u.Name, u.Email, Maps.Initials(u.Name), u.AvatarColor,
+                u.Role == Roles.Admin, u.IsGlobalAdmin)));
+        }).RequireAuthorization().WithTags("Roles").Produces<IEnumerable<RoleRowDto>>();
+
+        api.MapPost("/roles/{id:guid}/grant", (HttpContext ctx, Guid id, AppDbContext db, AuditWriter audit) =>
+            SetDashboardAdmin(ctx, id, grant: true, db, audit)).RequireAuthorization().WithTags("Roles");
+
+        api.MapPost("/roles/{id:guid}/revoke", (HttpContext ctx, Guid id, AppDbContext db, AuditWriter audit) =>
+            SetDashboardAdmin(ctx, id, grant: false, db, audit)).RequireAuthorization().WithTags("Roles");
+    }
+
+    private static async Task<IResult> SetDashboardAdmin(HttpContext ctx, Guid id, bool grant, AppDbContext db, AuditWriter audit)
+    {
+        var deny = Authz.RequireHumanStaff(ctx);
+        if (deny is not null) return deny;
+        var actor = Authz.Actor(ctx);
+        if (actor.Id is not Guid actorId) return Results.Unauthorized();
+        var actorUser = await db.Users.FirstAsync(u => u.Id == actorId);
+        if (!actorUser.IsGlobalAdmin)
+            return Results.Json(new { error = "Global Admin only" }, statusCode: 403);
+        if (id == actorId)
+            return Results.BadRequest(new { error = "You cannot change your own role." });
+        var target = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (target is null) return Results.NotFound();
+        if (target.IsGlobalAdmin && !grant)
+            return Results.BadRequest(new { error = "Global Admin cannot be revoked here." });
+        var before = new { target.Role, dashboardAdmin = target.Role == Roles.Admin };
+        target.Role = grant ? Roles.Admin : Roles.Staff;
+        await db.SaveChangesAsync();
+        await audit.WriteAsync(actorId, grant ? "grant" : "revoke", "role", target.Id, null, before,
+            new { target.Role, dashboardAdmin = target.Role == Roles.Admin }, "dashboard administrator");
+        return Results.Ok(new RoleRowDto(
+            target.Id, target.Name, target.Email, Maps.Initials(target.Name), target.AvatarColor,
+            target.Role == Roles.Admin, target.IsGlobalAdmin));
+    }
+
+    private static void MapShoutouts(RouteGroupBuilder api)
+    {
+        api.MapGet("/shoutouts", async (HttpContext ctx, AppDbContext db, DateTime? after) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            var actor = Authz.Actor(ctx);
+            var actorUser = actor.Id is Guid uid ? await db.Users.AsNoTracking().FirstAsync(u => u.Id == uid) : null;
+            var canSend = actorUser?.Role == Roles.Admin;
+            var (cooldown, waitLabel) = await ShoutCooldownAsync(db, actor.Id);
+            var q = db.Shoutouts.Include(s => s.FromUser).AsQueryable();
+            if (after is DateTime since)
+            {
+                var utc = since.Kind == DateTimeKind.Utc ? since : since.ToUniversalTime();
+                q = q.Where(s => s.CreatedAt > utc);
+            }
+            var rows = await q.OrderBy(s => s.CreatedAt).Take(20).ToListAsync();
+            return Results.Ok(new ShoutoutFeedDto(
+                rows.Select(Maps.ShoutItem),
+                canSend,
+                cooldown,
+                waitLabel));
+        }).RequireAuthorization().WithTags("Shoutouts").Produces<ShoutoutFeedDto>();
+
+        api.MapPost("/shoutouts", async (HttpContext ctx, ShoutoutCreateRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireDashboardAdmin(ctx);
+            if (deny is not null) return deny;
+            var actor = Authz.Actor(ctx);
+            if (actor.Id is not Guid uid) return Results.Unauthorized();
+            var actorUser = await db.Users.FirstAsync(u => u.Id == uid);
+            if (actorUser.Role != Roles.Admin)
+                return Results.Json(new { error = "Dashboard administrator only" }, statusCode: 403);
+
+            var preset = BlankToNull(req.Preset);
+            var emoji = BlankToNull(req.Emoji);
+            var text = BlankToNull(req.Text);
+            if (preset is not null && !ShoutoutRules.Presets.Contains(preset))
+                return Results.BadRequest(new { error = "Pick Good morning, High five, or Congratulations." });
+            if (emoji is not null && !ShoutoutRules.Emojis.Contains(emoji))
+                return Results.BadRequest(new { error = "Pick 😊 🙌 ⭐ or 🎉." });
+            if (text is { Length: > ShoutoutRules.MaxText })
+                return Results.BadRequest(new { error = $"Optional text is {ShoutoutRules.MaxText} characters max." });
+            if (preset is null && emoji is null && text is null)
+                return Results.BadRequest(new { error = "Pick a preset or emoji — text is optional." });
+
+            var (cooldown, waitLabel) = await ShoutCooldownAsync(db, uid);
+            if (cooldown > 0)
+                return Results.Json(new { error = "Wait before sending another shoutout.", retryAfterSeconds = cooldown, waitLabel }, statusCode: 429);
+
+            var shout = new Shoutout
+            {
+                Id = Guid.NewGuid(),
+                FromUserId = uid,
+                Preset = preset,
+                Emoji = emoji,
+                Text = text,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Shoutouts.Add(shout);
+            await db.SaveChangesAsync();
+            await db.Entry(shout).Reference(s => s.FromUser).LoadAsync();
+            await audit.WriteAsync(uid, "create", "shoutout", shout.Id, null, null, new { shout.Preset, shout.Emoji, shout.Text }, null);
+            return Results.Ok(new
+            {
+                item = Maps.ShoutItem(shout),
+                cooldownSeconds = (int)ShoutoutRules.PerAdmin.TotalSeconds,
+                waitLabel = Maps.WaitLabel(ShoutoutRules.PerAdmin),
+                toastSeconds = ShoutoutRules.ToastSeconds,
+                sound = false
+            });
+        }).RequireAuthorization().WithTags("Shoutouts");
+    }
+
+    private static async Task<(int Seconds, string? Label)> ShoutCooldownAsync(AppDbContext db, Guid? userId)
+    {
+        var now = DateTime.UtcNow;
+        var waits = new List<TimeSpan>();
+        if (userId is Guid uid)
+        {
+            var lastMine = await db.Shoutouts.Where(s => s.FromUserId == uid).OrderByDescending(s => s.CreatedAt).FirstOrDefaultAsync();
+            if (lastMine is not null)
+            {
+                var until = lastMine.CreatedAt + ShoutoutRules.PerAdmin;
+                if (until > now) waits.Add(until - now);
+            }
+        }
+        var lastAny = await db.Shoutouts.OrderByDescending(s => s.CreatedAt).FirstOrDefaultAsync();
+        if (lastAny is not null)
+        {
+            var until = lastAny.CreatedAt + ShoutoutRules.SiteWide;
+            if (until > now) waits.Add(until - now);
+        }
+        if (waits.Count == 0) return (0, null);
+        var wait = waits.Max();
+        return ((int)Math.Ceiling(wait.TotalSeconds), Maps.WaitLabel(wait));
     }
 
     private static void MapHome(RouteGroupBuilder api)

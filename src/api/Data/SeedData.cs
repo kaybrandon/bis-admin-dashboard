@@ -13,9 +13,11 @@ public static class SeedData
     public static async Task EnsureAsync(AppDbContext db, VaultCrypto vault, IConfiguration config, ILogger log, FileStore files)
     {
         await EnsureClipboardClearColumnAsync(db);
+        await EnsureRolesShoutoutSchemaAsync(db);
         if (await db.Users.AnyAsync())
         {
             log.LogInformation("Seed skipped — users already present.");
+            await EnsureBootstrapGlobalAdminAsync(db);
             await files.EnsureSeedBlobsAsync(db);
             return;
         }
@@ -44,6 +46,7 @@ public static class SeedData
             Ext = "101",
             DepartmentId = ops.Id,
             Role = Roles.Admin,
+            IsGlobalAdmin = true,
             ManagerId = null,
             PasswordHash = hash,
             CreatedAt = now,
@@ -455,6 +458,69 @@ public static class SeedData
         await files.EnsureSeedBlobsAsync(db);
         log.LogInformation("Seed complete. Brandon=admin Maya=staff password is the documented seed password (never logged).");
         _ = Encoding.UTF8.GetBytes(SeedPassword); // keep const referenced without logging
+    }
+
+    public static async Task EnsureRolesShoutoutSchemaAsync(AppDbContext db)
+    {
+        if (db.Database.IsSqlite())
+        {
+            await db.Database.OpenConnectionAsync();
+            await using (var cmd = db.Database.GetDbConnection().CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Users') WHERE name='IsGlobalAdmin'";
+                var count = Convert.ToInt64(await cmd.ExecuteScalarAsync() ?? 0L);
+                if (count == 0)
+                    await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Users" ADD COLUMN "IsGlobalAdmin" INTEGER NOT NULL DEFAULT 0""");
+            }
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TABLE IF NOT EXISTS "Shoutouts" (
+                    "Id" TEXT NOT NULL CONSTRAINT "PK_Shoutouts" PRIMARY KEY,
+                    "FromUserId" TEXT NOT NULL,
+                    "Preset" TEXT NULL,
+                    "Emoji" TEXT NULL,
+                    "Text" TEXT NULL,
+                    "CreatedAt" TEXT NOT NULL,
+                    CONSTRAINT "FK_Shoutouts_Users_FromUserId" FOREIGN KEY ("FromUserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+                );
+                """);
+            await db.Database.ExecuteSqlRawAsync("""CREATE INDEX IF NOT EXISTS "IX_Shoutouts_CreatedAt" ON "Shoutouts" ("CreatedAt");""");
+            await db.Database.ExecuteSqlRawAsync("""CREATE INDEX IF NOT EXISTS "IX_Shoutouts_FromUserId_CreatedAt" ON "Shoutouts" ("FromUserId", "CreatedAt");""");
+            return;
+        }
+
+        if (db.Database.IsSqlServer())
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                IF COL_LENGTH('dbo.Users', 'IsGlobalAdmin') IS NULL
+                    ALTER TABLE dbo.Users ADD IsGlobalAdmin bit NOT NULL CONSTRAINT DF_Users_IsGlobalAdmin DEFAULT 0;
+                IF OBJECT_ID('dbo.Shoutouts', 'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.Shoutouts (
+                        Id uniqueidentifier NOT NULL CONSTRAINT PK_Shoutouts PRIMARY KEY,
+                        FromUserId uniqueidentifier NOT NULL,
+                        Preset nvarchar(40) NULL,
+                        Emoji nvarchar(16) NULL,
+                        Text nvarchar(80) NULL,
+                        CreatedAt datetime2 NOT NULL,
+                        CONSTRAINT FK_Shoutouts_Users_FromUserId FOREIGN KEY (FromUserId) REFERENCES dbo.Users (Id)
+                    );
+                    CREATE INDEX IX_Shoutouts_CreatedAt ON dbo.Shoutouts (CreatedAt);
+                    CREATE INDEX IX_Shoutouts_FromUserId_CreatedAt ON dbo.Shoutouts (FromUserId, CreatedAt);
+                END
+                """);
+        }
+    }
+
+    public static async Task EnsureBootstrapGlobalAdminAsync(AppDbContext db)
+    {
+        if (await db.Users.AnyAsync(u => u.IsGlobalAdmin)) return;
+        var brandon = await db.Users.FirstOrDefaultAsync(u =>
+            u.Email == "brandon@bisconsultants.example" && u.Role == Roles.Admin);
+        if (brandon is null)
+            brandon = await db.Users.Where(u => u.Role == Roles.Admin).OrderBy(u => u.CreatedAt).FirstOrDefaultAsync();
+        if (brandon is null) return;
+        brandon.IsGlobalAdmin = true;
+        await db.SaveChangesAsync();
     }
 
     private static async Task EnsureClipboardClearColumnAsync(AppDbContext db)

@@ -148,6 +148,14 @@ public static class Authz
         return null;
     }
 
+    public static IResult? RequireDashboardAdmin(HttpContext ctx)
+    {
+        var deny = RequireAdmin(ctx);
+        if (deny is not null) return deny;
+        if (Actor(ctx).IsToken) return Results.Json(new { error = "Access tokens cannot send shoutouts." }, statusCode: 403);
+        return null;
+    }
+
     public static IResult? DenyTokenForVaultOrAdmin(HttpContext ctx)
     {
         var a = Actor(ctx);

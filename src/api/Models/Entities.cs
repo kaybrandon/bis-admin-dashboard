@@ -18,6 +18,7 @@ public class User
     public Guid? DepartmentId { get; set; }
     public Department? Department { get; set; }
     public string Role { get; set; } = Roles.Staff;
+    public bool IsGlobalAdmin { get; set; }
     public Guid? ManagerId { get; set; }
     public User? Manager { get; set; }
     public string? PhotoBlob { get; set; }
@@ -340,4 +341,25 @@ public class CompanySettings
     public bool GeofenceOffice { get; set; }
     public string? OfficeAddress { get; set; }
     public string TimeZone { get; set; } = "America/Chicago";
+}
+
+public static class ShoutoutRules
+{
+    public static readonly string[] Presets = ["Good morning", "High five", "Congratulations"];
+    public static readonly string[] Emojis = ["😊", "🙌", "⭐", "🎉"];
+    public const int MaxText = 80;
+    public static readonly TimeSpan PerAdmin = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan SiteWide = TimeSpan.FromMinutes(2);
+    public const int ToastSeconds = 6;
+}
+
+public class Shoutout
+{
+    public Guid Id { get; set; }
+    public Guid FromUserId { get; set; }
+    public User? FromUser { get; set; }
+    public string? Preset { get; set; }
+    public string? Emoji { get; set; }
+    public string? Text { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
