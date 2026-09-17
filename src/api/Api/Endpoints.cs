@@ -743,6 +743,38 @@ public static class Endpoints
             return Results.Ok(Maps.UserCard(u, open, kudosWeek, kudosMonth, mentionsWeek));
         }).RequireAuthorization();
 
+        api.MapPut("/team/{id:guid}", async (HttpContext ctx, Guid id, TeamUpdateRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var deny = Authz.RequireHumanStaff(ctx);
+            if (deny is not null) return deny;
+            var actor = Authz.Actor(ctx);
+            if (!actor.IsAdmin && actor.Id != id)
+                return Results.Json(new { error = "You can only edit your own profile." }, statusCode: 403);
+            var u = await db.Users.Include(x => x.Department).Include(x => x.Manager).FirstOrDefaultAsync(x => x.Id == id);
+            if (u is null) return Results.NotFound();
+            var before = new { u.Name, u.Email, u.Role, u.Title, u.DepartmentId, u.ManagerId, u.PhoneMobile, u.PhoneWork, u.Ext, u.Notes, u.CoveringFor, u.Birthday, u.WorkAnniversary };
+            if (actor.IsAdmin)
+            {
+                if (await ApplyTeamAdminFields(u, req, db) is { } bad) return bad;
+            }
+            else
+            {
+                if (req.Name is not null) u.Name = req.Name;
+                if (req.PhoneMobile is not null) u.PhoneMobile = req.PhoneMobile;
+                if (req.PhoneWork is not null) u.PhoneWork = req.PhoneWork;
+                if (req.Ext is not null) u.Ext = req.Ext;
+                if (ApplyBirthday(u, req.ClearBirthday, req.BirthdayMonth, req.BirthdayDay, req.BirthdayYear, req.Birthday) is { } bad)
+                    return bad;
+                if (ApplyWorkAnniversary(u, req.ClearWorkAnniversary, req.WorkAnniversaryMonth, req.WorkAnniversaryDay, req.WorkAnniversaryYear, req.WorkAnniversary) is { } badAnn)
+                    return badAnn;
+            }
+            await db.SaveChangesAsync();
+            await db.Entry(u).Reference(x => x.Department).LoadAsync();
+            await db.Entry(u).Reference(x => x.Manager).LoadAsync();
+            await audit.WriteAsync(actor.Id, "edit", "user", u.Id, null, before, new { u.Name, u.Email, u.Role, u.Title, u.DepartmentId, u.ManagerId, u.PhoneMobile, u.PhoneWork, u.Ext, u.Notes, u.CoveringFor, u.Birthday, u.WorkAnniversary }, actor.IsAdmin ? null : "self");
+            return Results.Ok(Maps.UserCard(u, await OpenPunch(db, u.Id), 0, 0, 0));
+        }).RequireAuthorization();
+
         api.MapGet("/me", async (HttpContext ctx, AppDbContext db) =>
         {
             var deny = Authz.RequireHumanStaff(ctx);
@@ -1138,32 +1170,57 @@ public static class Endpoints
 
         admin.MapPost("/users", async (HttpContext ctx, UserCreateRequest req, AppDbContext db, AuditWriter audit) =>
         {
+            if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Email))
+                return Results.BadRequest(new { error = "Name and email are required." });
             if (req.Role is not (Roles.Staff or Roles.Admin)) return Results.BadRequest(new { error = "Role must be staff or admin." });
+            var email = req.Email.Trim().ToLowerInvariant();
+            if (!email.Contains('@')) return Results.BadRequest(new { error = "Need a valid email." });
+            if (await db.Users.AnyAsync(x => x.Email == email))
+                return Results.BadRequest(new { error = "That email is already on the team." });
+            if (req.DepartmentId is Guid depId && !await db.Departments.AnyAsync(d => d.Id == depId))
+                return Results.BadRequest(new { error = "Unknown department." });
+            if (req.ManagerId is Guid mgrId && !await db.Users.AnyAsync(x => x.Id == mgrId))
+                return Results.BadRequest(new { error = "Unknown manager." });
             var u = new User
             {
-                Id = Guid.NewGuid(), Name = req.Name, Email = req.Email.Trim().ToLowerInvariant(),
-                Role = req.Role, DepartmentId = req.DepartmentId, ManagerId = req.ManagerId,
-                PhoneMobile = req.PhoneMobile, PhoneWork = req.PhoneWork ?? "(940) 555-0100", Ext = req.Ext, Title = req.Title,
+                Id = Guid.NewGuid(),
+                Name = req.Name.Trim(),
+                Email = email,
+                Role = req.Role,
+                DepartmentId = req.DepartmentId,
+                ManagerId = req.ManagerId,
+                PhoneMobile = BlankToNull(req.PhoneMobile),
+                PhoneWork = BlankToNull(req.PhoneWork) ?? "(940) 555-0100",
+                Ext = BlankToNull(req.Ext),
+                Title = BlankToNull(req.Title),
+                Notes = BlankToNull(req.Notes),
+                CoveringFor = BlankToNull(req.CoveringFor),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(string.IsNullOrWhiteSpace(req.Password) ? SeedData.SeedPassword : req.Password),
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                AvatarColor = AvatarFor(req.Name)
             };
-            db.Users.Add(u);
-            await db.SaveChangesAsync();
-            await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "user", u.Id, null, null, new { u.Email, u.Role }, null);
-            return Results.Ok(new { u.Id });
-        });
-
-        admin.MapPut("/users/{id:guid}", async (HttpContext ctx, Guid id, TeamBirthdayRequest req, AppDbContext db, AuditWriter audit) =>
-        {
-            var u = await db.Users.Include(x => x.Department).Include(x => x.Manager).FirstOrDefaultAsync(x => x.Id == id);
-            if (u is null) return Results.NotFound();
-            var before = new { u.Birthday, u.WorkAnniversary };
             if (ApplyBirthday(u, req.ClearBirthday, req.BirthdayMonth, req.BirthdayDay, req.BirthdayYear, req.Birthday) is { } bad)
                 return bad;
             if (ApplyWorkAnniversary(u, req.ClearWorkAnniversary, req.WorkAnniversaryMonth, req.WorkAnniversaryDay, req.WorkAnniversaryYear, req.WorkAnniversary) is { } badAnn)
                 return badAnn;
+            db.Users.Add(u);
             await db.SaveChangesAsync();
-            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "user", u.Id, null, before, new { u.Birthday, u.WorkAnniversary }, "birthday");
+            await db.Entry(u).Reference(x => x.Department).LoadAsync();
+            await db.Entry(u).Reference(x => x.Manager).LoadAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "user", u.Id, null, null, new { u.Email, u.Role }, null);
+            return Results.Ok(Maps.UserCard(u, null, 0, 0, 0));
+        });
+
+        admin.MapPut("/users/{id:guid}", async (HttpContext ctx, Guid id, TeamUpdateRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var u = await db.Users.Include(x => x.Department).Include(x => x.Manager).FirstOrDefaultAsync(x => x.Id == id);
+            if (u is null) return Results.NotFound();
+            var before = new { u.Name, u.Email, u.Role, u.Title, u.DepartmentId, u.ManagerId, u.PhoneMobile, u.PhoneWork, u.Ext, u.Notes, u.CoveringFor, u.Birthday, u.WorkAnniversary };
+            if (await ApplyTeamAdminFields(u, req, db) is { } bad) return bad;
+            await db.SaveChangesAsync();
+            await db.Entry(u).Reference(x => x.Department).LoadAsync();
+            await db.Entry(u).Reference(x => x.Manager).LoadAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "user", u.Id, null, before, new { u.Name, u.Email, u.Role, u.Title, u.DepartmentId, u.ManagerId, u.PhoneMobile, u.PhoneWork, u.Ext, u.Notes, u.CoveringFor, u.Birthday, u.WorkAnniversary }, null);
             return Results.Ok(Maps.UserCard(u, await OpenPunch(db, u.Id), 0, 0, 0));
         });
 
@@ -1432,6 +1489,62 @@ public static class Endpoints
             updatedAt = c.UpdatedAt,
             print = print ? new { notice = "Printed from Admin · no logins included", omitVault = true, omitCare = true } : null
         };
+    }
+
+    private static readonly string[] AvatarColors = ["#1c332c", "#2b5f8a", "#6b4a7a", "#8a5a2b", "#3d5a3d", "#5a3d2b"];
+
+    private static string AvatarFor(string name)
+    {
+        var h = 0;
+        foreach (var c in name) h = unchecked(h * 31 + c);
+        return AvatarColors[Math.Abs(h) % AvatarColors.Length];
+    }
+
+    private static async Task<IResult?> ApplyTeamAdminFields(User u, TeamUpdateRequest req, AppDbContext db)
+    {
+        if (req.Name is not null)
+        {
+            if (string.IsNullOrWhiteSpace(req.Name)) return Results.BadRequest(new { error = "Name is required." });
+            u.Name = req.Name.Trim();
+        }
+        if (req.Email is not null)
+        {
+            var email = req.Email.Trim().ToLowerInvariant();
+            if (!email.Contains('@')) return Results.BadRequest(new { error = "Need a valid email." });
+            if (await db.Users.AnyAsync(x => x.Email == email && x.Id != u.Id))
+                return Results.BadRequest(new { error = "That email is already on the team." });
+            u.Email = email;
+        }
+        if (req.Role is not null)
+        {
+            if (req.Role is not (Roles.Staff or Roles.Admin))
+                return Results.BadRequest(new { error = "Role must be staff or admin." });
+            u.Role = req.Role;
+        }
+        if (req.Title is not null) u.Title = BlankToNull(req.Title);
+        if (req.PhoneMobile is not null) u.PhoneMobile = BlankToNull(req.PhoneMobile);
+        if (req.PhoneWork is not null) u.PhoneWork = BlankToNull(req.PhoneWork);
+        if (req.Ext is not null) u.Ext = BlankToNull(req.Ext);
+        if (req.Notes is not null) u.Notes = BlankToNull(req.Notes);
+        if (req.CoveringFor is not null) u.CoveringFor = BlankToNull(req.CoveringFor);
+        if (req.ClearDepartment == true) u.DepartmentId = null;
+        else if (req.DepartmentId is Guid depId)
+        {
+            if (!await db.Departments.AnyAsync(d => d.Id == depId))
+                return Results.BadRequest(new { error = "Unknown department." });
+            u.DepartmentId = depId;
+        }
+        if (req.ClearManager == true) u.ManagerId = null;
+        else if (req.ManagerId is Guid mgrId)
+        {
+            if (mgrId == u.Id) return Results.BadRequest(new { error = "Someone cannot manage themselves." });
+            if (!await db.Users.AnyAsync(x => x.Id == mgrId))
+                return Results.BadRequest(new { error = "Unknown manager." });
+            u.ManagerId = mgrId;
+        }
+        if (ApplyBirthday(u, req.ClearBirthday, req.BirthdayMonth, req.BirthdayDay, req.BirthdayYear, req.Birthday) is { } bad)
+            return bad;
+        return ApplyWorkAnniversary(u, req.ClearWorkAnniversary, req.WorkAnniversaryMonth, req.WorkAnniversaryDay, req.WorkAnniversaryYear, req.WorkAnniversary);
     }
 
     private static IResult? ApplyBirthday(User u, bool? clearBirthday, int? month, int? day, int? year, string? birthday)
