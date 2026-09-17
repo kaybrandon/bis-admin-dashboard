@@ -43,7 +43,8 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 | Vault add | `POST /api/clients/{id}/vault` `{ department, title, username?, secret, url?, note? }` |
 | Reveal | `POST /api/clients/{id}/vault/{credId}/reveal` → `{ secret }` human staff only |
 | Files | `POST /api/clients/{id}/files` multipart `file` (images compress) · download `GET /files/{id}` or `GET /api/files/{id}` (JWT) |
-| Lookups | `GET /api/lookups` counties, flagLevels, services, departments |
+| Lookups | `GET /api/lookups` counties, flagLevels, services, departments, titles |
+| Person titles | `GET/POST/PUT /api/admin/titles[/{id}]` · `POST /api/admin/titles/{id}/retire` — **Admin only**; staff 403. Person Title on the file is a dropdown from this catalog (not free text). |
 
 `business.call` / `email` / `map` / `website` are **business** fields. Never “Call Bre”.
 

@@ -324,9 +324,10 @@ public static class Endpoints
             var deny = Authz.RequireHumanStaff(ctx);
             if (deny is not null) return deny;
             if (!await db.Clients.AnyAsync(c => c.Id == id)) return Results.NotFound();
+            if (await ValidatePersonTitle(db, req.Title, null) is { } titleErr) return titleErr;
             var p = new Person
             {
-                Id = Guid.NewGuid(), ClientId = id, Name = req.Name, Title = req.Title, Department = req.Department,
+                Id = Guid.NewGuid(), ClientId = id, Name = req.Name, Title = BlankToNull(req.Title), Department = req.Department,
                 Email = req.Email, Phone = req.Phone, Pinned = req.Pinned || req.Primary, Primary = req.Primary
             };
             db.People.Add(p);
@@ -364,6 +365,7 @@ public static class Endpoints
             if (p is null) return Results.NotFound();
             var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
             if (client is null) return Results.NotFound();
+            if (await ValidatePersonTitle(db, req.Title, p.Title) is { } titleErr) return titleErr;
             var before = new { p.Name, p.Title, p.Department, p.Email, p.Phone, p.Pinned, p.Primary };
             p.Name = req.Name.Trim();
             p.Title = BlankToNull(req.Title);
@@ -1200,6 +1202,56 @@ public static class Endpoints
             return Results.Ok(l);
         });
 
+        admin.MapGet("/titles", async (AppDbContext db) =>
+            Results.Ok(await db.PersonTitles.OrderBy(t => t.Retired).ThenBy(t => t.Name)
+                .Select(t => new PersonTitleDto(t.Id, t.Name, t.Retired)).ToListAsync()));
+        admin.MapPost("/titles", async (HttpContext ctx, TitleWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Name)) return Results.BadRequest(new { error = "Name the title." });
+            var name = req.Name.Trim();
+            if (name.Length > 60) return Results.BadRequest(new { error = "Title is too long (max 60)." });
+            if (await db.PersonTitles.AnyAsync(t => t.Name.ToLower() == name.ToLower()))
+                return Results.BadRequest(new { error = "That title is already in Settings." });
+            var t = new PersonTitle { Id = Guid.NewGuid(), Name = name, Retired = req.Retired == true, CreatedAt = DateTime.UtcNow };
+            db.PersonTitles.Add(t);
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "personTitle", t.Id, null, null, new { t.Name, t.Retired }, null);
+            return Results.Ok(new PersonTitleDto(t.Id, t.Name, t.Retired));
+        });
+        admin.MapPut("/titles/{id:guid}", async (HttpContext ctx, Guid id, TitleWriteRequest req, AppDbContext db, AuditWriter audit) =>
+        {
+            var t = await db.PersonTitles.FirstOrDefaultAsync(x => x.Id == id);
+            if (t is null) return Results.NotFound();
+            var before = new { t.Name, t.Retired };
+            if (req.Name is not null)
+            {
+                var name = req.Name.Trim();
+                if (name.Length is 0 or > 60) return Results.BadRequest(new { error = "Name the title (max 60)." });
+                if (await db.PersonTitles.AnyAsync(x => x.Id != id && x.Name.ToLower() == name.ToLower()))
+                    return Results.BadRequest(new { error = "That title is already in Settings." });
+                if (!string.Equals(t.Name, name, StringComparison.Ordinal))
+                {
+                    var old = t.Name;
+                    t.Name = name;
+                    foreach (var p in await db.People.Where(p => p.Title == old).ToListAsync())
+                        p.Title = name;
+                }
+            }
+            if (req.Retired is bool retired) t.Retired = retired;
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "personTitle", t.Id, null, before, new { t.Name, t.Retired }, null);
+            return Results.Ok(new PersonTitleDto(t.Id, t.Name, t.Retired));
+        });
+        admin.MapPost("/titles/{id:guid}/retire", async (HttpContext ctx, Guid id, AppDbContext db, AuditWriter audit) =>
+        {
+            var t = await db.PersonTitles.FirstOrDefaultAsync(x => x.Id == id);
+            if (t is null) return Results.NotFound();
+            t.Retired = true;
+            await db.SaveChangesAsync();
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "retire", "personTitle", t.Id, null, null, new { t.Name, t.Retired }, null);
+            return Results.Ok(new PersonTitleDto(t.Id, t.Name, t.Retired));
+        });
+
         admin.MapGet("/counties", async (AppDbContext db) => Results.Ok(await db.Counties.OrderBy(c => c.Name).ToListAsync()));
         admin.MapPost("/counties", async (NamedRequest req, AppDbContext db) =>
         {
@@ -1370,6 +1422,8 @@ public static class Endpoints
                 counties = await db.Counties.OrderBy(c => c.Name).Select(c => c.Name).ToListAsync(),
                 services = await db.ServiceTypes.OrderBy(s => s.Name).ToListAsync(),
                 flagLevels = await db.FlagLevels.ToListAsync(),
+                titles = await db.PersonTitles.OrderBy(t => t.Retired).ThenBy(t => t.Name)
+                    .Select(t => new PersonTitleDto(t.Id, t.Name, t.Retired)).ToListAsync(),
                 customFields = await db.CustomFieldDefs.ToListAsync(),
                 ssoEnabled = string.Equals(cfg["SSO_ENABLED"], "true", StringComparison.OrdinalIgnoreCase),
                 product = "Admin"
@@ -1525,6 +1579,17 @@ public static class Endpoints
         foreach (var g in punches.GroupBy(p => p.Workplace))
             result[g.Key] = Hours(g.ToList());
         return result;
+    }
+
+    private static async Task<IResult?> ValidatePersonTitle(AppDbContext db, string? title, string? existingTitle)
+    {
+        var name = BlankToNull(title);
+        if (name is null) return null;
+        var row = await db.PersonTitles.FirstOrDefaultAsync(t => t.Name.ToLower() == name.ToLower());
+        if (row is null) return Results.BadRequest(new { error = "Pick a title from Settings." });
+        if (row.Retired && !string.Equals(existingTitle, row.Name, StringComparison.OrdinalIgnoreCase))
+            return Results.BadRequest(new { error = "That title is retired." });
+        return null;
     }
 
     private static void Touch(Client c, Guid? actorId)

@@ -13,6 +13,7 @@ public static class SeedData
     public static async Task EnsureAsync(AppDbContext db, VaultCrypto vault, IConfiguration config, ILogger log, FileStore files)
     {
         await EnsureClipboardClearColumnAsync(db);
+        await EnsurePersonTitlesAsync(db);
         if (await db.Users.AnyAsync())
         {
             log.LogInformation("Seed skipped — users already present.");
@@ -455,6 +456,61 @@ public static class SeedData
         await files.EnsureSeedBlobsAsync(db);
         log.LogInformation("Seed complete. Brandon=admin Maya=staff password is the documented seed password (never logged).");
         _ = Encoding.UTF8.GetBytes(SeedPassword); // keep const referenced without logging
+    }
+
+    public static readonly (Guid Id, string Name)[] CatalogTitles =
+    {
+        (Guid.Parse("99999999-9999-9999-9999-999999999901"), "Owner"),
+        (Guid.Parse("99999999-9999-9999-9999-999999999902"), "Studio IT"),
+        (Guid.Parse("99999999-9999-9999-9999-999999999903"), "IT"),
+        (Guid.Parse("99999999-9999-9999-9999-999999999904"), "Designer"),
+        (Guid.Parse("99999999-9999-9999-9999-999999999905"), "Office manager"),
+        (Guid.Parse("99999999-9999-9999-9999-999999999906"), "Broker"),
+        (Guid.Parse("99999999-9999-9999-9999-999999999907"), "Billing"),
+        (Guid.Parse("99999999-9999-9999-9999-999999999908"), "Principal"),
+        (Guid.Parse("99999999-9999-9999-9999-999999999909"), "Technician")
+    };
+
+    public static async Task EnsurePersonTitlesAsync(AppDbContext db)
+    {
+        if (db.Database.IsSqlite())
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TABLE IF NOT EXISTS PersonTitles (
+                    Id TEXT NOT NULL PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Retired INTEGER NOT NULL DEFAULT 0,
+                    CreatedAt TEXT NOT NULL
+                );
+                """);
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE UNIQUE INDEX IF NOT EXISTS IX_PersonTitles_Name ON PersonTitles (Name);
+                """);
+        }
+
+        if (!await db.PersonTitles.AnyAsync())
+            SeedPersonTitleRows(db, DateTime.UtcNow);
+
+        var known = (await db.PersonTitles.Select(t => t.Name.ToLower()).ToListAsync()).ToHashSet();
+        var extras = await db.People
+            .Where(p => p.Title != null && p.Title != "")
+            .Select(p => p.Title!)
+            .Distinct()
+            .ToListAsync();
+        foreach (var name in extras)
+        {
+            if (known.Contains(name.ToLower())) continue;
+            db.PersonTitles.Add(new PersonTitle { Id = Guid.NewGuid(), Name = name, CreatedAt = DateTime.UtcNow });
+            known.Add(name.ToLower());
+        }
+        if (db.ChangeTracker.HasChanges())
+            await db.SaveChangesAsync();
+    }
+
+    private static void SeedPersonTitleRows(AppDbContext db, DateTime now)
+    {
+        foreach (var (id, name) in CatalogTitles)
+            db.PersonTitles.Add(new PersonTitle { Id = id, Name = name, CreatedAt = now });
     }
 
     private static async Task EnsureClipboardClearColumnAsync(AppDbContext db)
