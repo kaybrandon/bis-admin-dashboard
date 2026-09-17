@@ -26,6 +26,7 @@ public class AppDbContext : DbContext
     public DbSet<Punch> Punches => Set<Punch>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<Comment> Comments => Set<Comment>();
+    public DbSet<PostThumb> PostThumbs => Set<PostThumb>();
     public DbSet<Sticky> Stickies => Set<Sticky>();
     public DbSet<Kudos> Kudos => Set<Kudos>();
     public DbSet<Mention> Mentions => Set<Mention>();
@@ -72,6 +73,11 @@ public class AppDbContext : DbContext
         model.Entity<Post>(e =>
         {
             e.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Thumbs).WithOne(x => x.Post).HasForeignKey(x => x.PostId);
+        });
+        model.Entity<PostThumb>(e =>
+        {
+            e.HasIndex(x => new { x.PostId, x.UserId }).IsUnique();
         });
         model.Entity<Comment>(e =>
         {

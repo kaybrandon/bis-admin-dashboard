@@ -26,6 +26,7 @@ export type HomePost = {
   weekStart: string;
   author?: string;
   comments: { id: string; body: string; author?: string; createdAt: string }[];
+  thumbs: number;
 };
 
 export type ClientListRow = {

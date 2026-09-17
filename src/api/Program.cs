@@ -105,6 +105,7 @@ using (var scope = app.Services.CreateScope())
         await db.Database.MigrateAsync();
     else
         await db.Database.EnsureCreatedAsync();
+    await EnsurePostThumbsTableAsync(db);
     var files = scope.ServiceProvider.GetRequiredService<FileStore>();
     await SeedData.EnsureAsync(db, vault, app.Configuration, log, files);
 }
@@ -113,5 +114,21 @@ if (args.Contains("--seed-only"))
     return;
 
 app.Run();
+
+static async Task EnsurePostThumbsTableAsync(AppDbContext db)
+{
+    if (!db.Database.IsSqlite()) return;
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS PostThumbs (
+            Id TEXT NOT NULL PRIMARY KEY,
+            PostId TEXT NOT NULL,
+            UserId TEXT NOT NULL,
+            CreatedAt TEXT NOT NULL
+        );
+        """);
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_PostThumbs_PostId_UserId ON PostThumbs (PostId, UserId);
+        """);
+}
 
 public partial class Program { }

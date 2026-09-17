@@ -110,6 +110,7 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         var json = await res.Content.ReadAsStringAsync();
         Assert.Contains("BIS Admin API", json);
         Assert.Contains("/api/home", json);
+        Assert.Contains("/api/posts/{id}/thumbs", json);
         Assert.Contains("/api/clients", json);
         Assert.Contains("/api/clients/{id}/services", json);
         Assert.Contains("/api/clients/{id}/links", json);
@@ -161,6 +162,34 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.True((await dl.Content.ReadAsByteArrayAsync()).Length > 0);
         var dlApi = await client.GetAsync("/api/files/" + fileId);
         Assert.Equal(HttpStatusCode.OK, dlApi.StatusCode);
+    }
+
+    [Fact]
+    public async Task Win_board_posts_expose_thumbs_count_and_comment()
+    {
+        var client = _factory.CreateClient();
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var home = await client.GetFromJsonAsync<JsonElement>("/api/home");
+        var win = home.GetProperty("posts").EnumerateArray().First(p => p.GetProperty("kind").GetString() == "win");
+        Assert.True(win.TryGetProperty("thumbs", out var thumbsEl));
+        var before = thumbsEl.GetInt32();
+        var id = win.GetProperty("id").GetString();
+
+        var thumb = await client.PostAsync($"/api/posts/{id}/thumbs", null);
+        thumb.EnsureSuccessStatusCode();
+        var first = await thumb.Content.ReadFromJsonAsync<JsonElement>();
+        var count = first.GetProperty("thumbs").GetInt32();
+        Assert.True(count >= before);
+
+        var again = await client.PostAsync($"/api/posts/{id}/thumbs", null);
+        again.EnsureSuccessStatusCode();
+        var second = await again.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(count, second.GetProperty("thumbs").GetInt32());
+
+        var comment = await client.PostAsJsonAsync($"/api/posts/{id}/comments", new { body = "Noted on the Win Board." });
+        comment.EnsureSuccessStatusCode();
     }
 
     [Fact]

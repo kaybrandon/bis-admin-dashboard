@@ -236,6 +236,16 @@ public class Post
     public DateTime CreatedAt { get; set; }
     public DateOnly WeekStart { get; set; }
     public List<Comment> Comments { get; set; } = new();
+    public List<PostThumb> Thumbs { get; set; } = new();
+}
+
+public class PostThumb
+{
+    public Guid Id { get; set; }
+    public Guid PostId { get; set; }
+    public Post? Post { get; set; }
+    public Guid UserId { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class Comment

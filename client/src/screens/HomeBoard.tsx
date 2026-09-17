@@ -15,6 +15,7 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
   const [kind, setKind] = useState("win");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
   const admin = user.role === "admin";
 
   const load = () =>
@@ -32,10 +33,9 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
   if (err) return <p className="err">{err}</p>;
   if (!board) return <p>Loading team board…</p>;
 
-  const wins = board.posts.filter(p => p.kind === "win");
   const updates = board.posts.filter(p => p.kind === "update");
-  const featuredWin = wins[0];
   const featuredUpdate = updates[0];
+  const openPost = board.posts.find(p => p.id === openId);
   const maxMentions = Math.max(1, ...board.mentions.map(m => m.count));
   const [first, second, third] = board.kudosTop;
   const starTo = board.starOfDay
@@ -98,10 +98,6 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
       </div>
 
       <div className="home-grid">
-        <article className="card mod home-card home-win accent-win">
-          <FeaturedPost post={featuredWin} kind="win" toast={toast} onChange={load} />
-        </article>
-
         <article className="card mod home-card home-update accent-update">
           <FeaturedPost post={featuredUpdate} kind="update" toast={toast} onChange={load} />
         </article>
@@ -142,21 +138,70 @@ export function Home({ user, toast }: { user: User; toast: ToastFn }) {
           ))}
         </article>
 
-        <article className="card mod home-card home-feed accent-board">
-          <div className="mod-h"><h2>Board</h2><span className="muted">{board.tz}</span></div>
-          {board.posts.length === 0 && <p className="muted">Nothing on the week board yet.</p>}
+        <article className="card mod home-card home-feed accent-win">
+          <div className="mod-h"><h2>Win Board</h2><span className="muted">{board.tz}</span></div>
+          {board.posts.length === 0 && <p className="muted">Nothing on the Win Board yet.</p>}
           {board.posts.map(p => (
-            <div className="row" key={p.id}>
+            <button type="button" className="row board-row" key={p.id} onClick={() => setOpenId(p.id)}>
               <div>
                 <strong>{p.kind === "win" ? "Win" : "Note"} · {p.title}</strong>
                 <div className="muted">This week · {p.author || "Shop"} · {chiShort(p.createdAt)}</div>
               </div>
               <span className={"chip" + (p.kind === "win" ? " on" : "")}>{p.kind === "win" ? "Win" : "Update"}</span>
-            </div>
+            </button>
           ))}
         </article>
       </div>
+
+      {openPost && (
+        <div className="dlg-scrim" onClick={() => setOpenId(null)}>
+          <article className="card mod home-card dlg" onClick={e => e.stopPropagation()}>
+            <PostDetail post={openPost} toast={toast} onChange={load} onClose={() => setOpenId(null)} />
+          </article>
+        </div>
+      )}
     </section>
+  );
+}
+
+function PostDetail({ post, toast, onChange, onClose }: { post: HomePost; toast: ToastFn; onChange: () => void; onClose: () => void }) {
+  const [draft, setDraft] = useState("");
+  const win = post.kind === "win";
+  const comment = async () => {
+    if (!draft.trim()) { toast("Write a comment"); return; }
+    try {
+      await api(`/api/posts/${post.id}/comments`, { method: "POST", body: JSON.stringify({ body: draft }) });
+      toast("Comment added");
+      setDraft("");
+      onChange();
+    } catch (e) { toast((e as Error).message); }
+  };
+  const thumb = async () => {
+    try {
+      await api(`/api/posts/${post.id}/thumbs`, { method: "POST" });
+      onChange();
+    } catch (e) { toast((e as Error).message); }
+  };
+  return (
+    <>
+      <div className="mod-h">
+        <h2>{win ? "Win" : "Update"}</h2>
+        <button type="button" className="btn s" onClick={onClose}>Close</button>
+      </div>
+      <p className={win ? "hero" : undefined}>{win ? post.title : <strong>{post.title}</strong>}</p>
+      <p className="muted" style={{ margin: "6px 0 10px" }}>This week · {post.author || "Shop"} · {chiShort(post.createdAt)}</p>
+      <p className="note">{mention(post.body)}</p>
+      <p className="muted" style={{ margin: "10px 0 0" }}>Thumbs · {post.thumbs ?? 0}</p>
+      {post.comments.map(c => (
+        <div className="comment" key={c.id}><strong>{c.author || "Shop"}</strong> · {mention(c.body)}</div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        <input className="sel" style={{ flex: 1, minWidth: 160 }} placeholder="Comment · @Name mentions count" value={draft} onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") comment(); }} />
+        <button className="btn s" onClick={comment}>Comment</button>
+        <button className="btn s" onClick={thumb}>Thumbs</button>
+      </div>
+    </>
   );
 }
 
