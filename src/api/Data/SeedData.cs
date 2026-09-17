@@ -12,6 +12,7 @@ public static class SeedData
 
     public static async Task EnsureAsync(AppDbContext db, VaultCrypto vault, IConfiguration config, ILogger log, FileStore files)
     {
+        await EnsureClipboardClearColumnAsync(db);
         if (await db.Users.AnyAsync())
         {
             log.LogInformation("Seed skipped — users already present.");
@@ -127,6 +128,7 @@ public static class SeedData
             Id = Guid.Parse("55555555-5555-5555-5555-555555555501"),
             CompanyName = "BIS Consultants",
             IdleMinutes = 15,
+            ClipboardClearSeconds = 30,
             SsoEnabled = string.Equals(config["SSO_ENABLED"], "true", StringComparison.OrdinalIgnoreCase),
             SsoProvider = "Microsoft Entra ID",
             OfficeAddress = "BIS shop · Denton",
@@ -447,5 +449,16 @@ public static class SeedData
         await files.EnsureSeedBlobsAsync(db);
         log.LogInformation("Seed complete. Brandon=admin Maya=staff password is the documented seed password (never logged).");
         _ = Encoding.UTF8.GetBytes(SeedPassword); // keep const referenced without logging
+    }
+
+    private static async Task EnsureClipboardClearColumnAsync(AppDbContext db)
+    {
+        if (!db.Database.IsSqlite()) return;
+        await db.Database.OpenConnectionAsync();
+        await using var cmd = db.Database.GetDbConnection().CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('CompanySettings') WHERE name='ClipboardClearSeconds'";
+        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync() ?? 0L);
+        if (count == 0)
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "CompanySettings" ADD COLUMN "ClipboardClearSeconds" INTEGER NOT NULL DEFAULT 30""");
     }
 }

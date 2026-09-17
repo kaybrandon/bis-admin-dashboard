@@ -116,6 +116,7 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("/api/clients/{id}/vendors", json);
         Assert.Contains("/api/admin/services", json);
         Assert.Contains("/api/flags", json);
+        Assert.Contains("/api/settings", json);
         Assert.Contains("HomeBoardDto", json);
         Assert.Contains("ClientFileDto", json);
         Assert.Contains("FlagRowDto", json);
@@ -344,6 +345,57 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         staffSvc.EnsureSuccessStatusCode();
         var staffSvcId = (await staffSvc.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
         (await client.DeleteAsync($"/api/clients/{murray}/services/{staffSvcId}")).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Admin_can_edit_workspace_settings_staff_can_read()
+    {
+        var client = _factory.CreateClient();
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var before = await client.GetFromJsonAsync<JsonElement>("/api/settings");
+        Assert.False(string.IsNullOrWhiteSpace(before.GetProperty("companyName").GetString()));
+        Assert.True(before.GetProperty("idleMinutes").GetInt32() >= 1);
+        Assert.True(before.GetProperty("clipboardClearSeconds").GetInt32() >= 5);
+
+        var badIdle = await client.PutAsJsonAsync("/api/admin/settings", new { idleMinutes = 0 });
+        Assert.Equal(HttpStatusCode.BadRequest, badIdle.StatusCode);
+        var badClip = await client.PutAsJsonAsync("/api/admin/settings", new { clipboardClearSeconds = 0 });
+        Assert.Equal(HttpStatusCode.BadRequest, badClip.StatusCode);
+        var badName = await client.PutAsJsonAsync("/api/admin/settings", new { companyName = "   " });
+        Assert.Equal(HttpStatusCode.BadRequest, badName.StatusCode);
+
+        var save = await client.PutAsJsonAsync("/api/admin/settings", new
+        {
+            companyName = "BIS Shop",
+            idleMinutes = 20,
+            clipboardClearSeconds = 45
+        });
+        save.EnsureSuccessStatusCode();
+
+        var adminView = await client.GetFromJsonAsync<JsonElement>("/api/admin/settings");
+        Assert.Equal("BIS Shop", adminView.GetProperty("companyName").GetString());
+        Assert.Equal(20, adminView.GetProperty("idleMinutes").GetInt32());
+        Assert.Equal(45, adminView.GetProperty("clipboardClearSeconds").GetInt32());
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+        var staffView = await client.GetFromJsonAsync<JsonElement>("/api/settings");
+        Assert.Equal("BIS Shop", staffView.GetProperty("companyName").GetString());
+        Assert.Equal(20, staffView.GetProperty("idleMinutes").GetInt32());
+        Assert.Equal(45, staffView.GetProperty("clipboardClearSeconds").GetInt32());
+        var blocked = await client.PutAsJsonAsync("/api/admin/settings", new { companyName = "Nope" });
+        Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+        var restore = await client.PutAsJsonAsync("/api/admin/settings", new
+        {
+            companyName = "BIS Consultants",
+            idleMinutes = 15,
+            clipboardClearSeconds = 30
+        });
+        restore.EnsureSuccessStatusCode();
     }
 
     private static async Task<JsonElement> Login(HttpClient client, string email)

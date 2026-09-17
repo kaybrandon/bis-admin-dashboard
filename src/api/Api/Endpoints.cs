@@ -19,6 +19,7 @@ public static class Endpoints
 
         var api = app.MapGroup("/api");
         MapAuth(api);
+        MapWorkspace(api);
         MapHome(api);
         MapClients(api);
         MapFlags(api);
@@ -117,6 +118,17 @@ public static class Endpoints
             var user = await db.Users.FirstAsync(u => u.Id == Authz.Actor(ctx).Id);
             return Results.Ok(new { token = AuthSetup.IssueJwt(jwt, user), expiresInMinutes = 15 });
         }).RequireAuthorization();
+    }
+
+    private static void MapWorkspace(RouteGroupBuilder api)
+    {
+        api.MapGet("/settings", async (HttpContext ctx, AppDbContext db) =>
+        {
+            var deny = Authz.RequireStaff(ctx);
+            if (deny is not null && !Authz.Actor(ctx).IsToken) return deny;
+            var s = await db.CompanySettings.FirstAsync();
+            return Results.Ok(new WorkspaceSettingsDto(s.CompanyName, s.IdleMinutes, s.ClipboardClearSeconds));
+        }).RequireAuthorization().WithTags("Settings").Produces<WorkspaceSettingsDto>();
     }
 
     private static void MapHome(RouteGroupBuilder api)
@@ -1164,7 +1176,7 @@ public static class Endpoints
             var s = await db.CompanySettings.FirstAsync();
             return Results.Ok(new
             {
-                s.CompanyName, s.ShowPresence, s.IdleMinutes, s.CompressPhotos, s.AllowDocuments, s.MaxUploadMb,
+                s.CompanyName, s.ShowPresence, s.IdleMinutes, s.ClipboardClearSeconds, s.CompressPhotos, s.AllowDocuments, s.MaxUploadMb,
                 ssoEnabled = string.Equals(cfg["SSO_ENABLED"], "true", StringComparison.OrdinalIgnoreCase),
                 s.SsoProvider, s.GeofenceOffice, s.OfficeAddress, s.TimeZone
             });
@@ -1173,12 +1185,26 @@ public static class Endpoints
         admin.MapPut("/settings", async (HttpContext ctx, SettingWriteRequest req, AppDbContext db, AuditWriter audit) =>
         {
             var s = await db.CompanySettings.FirstAsync();
-            if (req.CompanyName is not null) s.CompanyName = req.CompanyName;
+            if (req.CompanyName is not null)
+            {
+                var name = req.CompanyName.Trim();
+                if (name.Length is 0 or > 80) return Results.BadRequest(new { error = "Company name is required (max 80)." });
+                s.CompanyName = name;
+            }
             if (req.ShowPresence is bool p) s.ShowPresence = p;
-            if (req.IdleMinutes is int m) s.IdleMinutes = m;
+            if (req.IdleMinutes is int m)
+            {
+                if (m is < 1 or > 240) return Results.BadRequest(new { error = "Idle after must be 1–240 minutes." });
+                s.IdleMinutes = m;
+            }
             if (req.GeofenceOffice is bool g) s.GeofenceOffice = g;
+            if (req.ClipboardClearSeconds is int c)
+            {
+                if (c is < 5 or > 600) return Results.BadRequest(new { error = "Clear copied password must be 5–600 seconds." });
+                s.ClipboardClearSeconds = c;
+            }
             await db.SaveChangesAsync();
-            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "settings", s.Id, null, null, new { s.CompanyName, s.IdleMinutes }, null);
+            await audit.WriteAsync(Authz.Actor(ctx).Id, "edit", "settings", s.Id, null, null, new { s.CompanyName, s.IdleMinutes, s.ClipboardClearSeconds }, null);
             return Results.Ok(s);
         });
 
