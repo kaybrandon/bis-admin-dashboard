@@ -344,10 +344,12 @@ function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
           {admin ? (
             <div style={{ marginTop: 12 }}>
               <DateFields label="Birthday" month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
-              <button className="btn s" onClick={async () => {
-                const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(birthdayPayload(bMonth, bDay, bYear)) });
-                setU(saved); toast("Birthday saved");
-              }}>Save birthday</button>
+              <div style={{ marginBottom: 14 }}>
+                <button className="btn s" onClick={async () => {
+                  const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(birthdayPayload(bMonth, bDay, bYear)) });
+                  setU(saved); toast("Birthday saved");
+                }}>Save birthday</button>
+              </div>
               <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
               <button className="btn s" onClick={async () => {
                 const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(anniversaryPayload(aMonth, aDay, aYear)) });
@@ -798,7 +800,7 @@ function DateFields({ label, hint, month, day, year, setMonth, setDay, setYear }
 }) {
   return (
     <>
-      <label className="muted">{label}</label>
+      <label className="muted" style={{ display: "block" }}>{label}</label>
       <div className="bday-row">
         <select className="sel" value={month} onChange={e => setMonth(e.target.value)} aria-label={label + " month"}>
           <option value="">Month</option>
