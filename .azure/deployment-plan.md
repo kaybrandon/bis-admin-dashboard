@@ -69,7 +69,7 @@ Generated: 2026-09-16
 |---------|---------|
 | Log Analytics | Centralized logging |
 | Application Insights | 500s / health |
-| Key Vault | DB, blob, `AUTH_SECRET`, `VAULT_DEK`, CORS/`APP_BASE_URL`, `SSO_ENABLED=false` |
+| Key Vault | Dash-safe secrets: `SqlConnectionString`, `StorageConnectionString`, `BLOB-CONTAINER`, `SSO-ENABLED`, `AUTH-SECRET`, `VAULT-DEK` → App env `ConnectionStrings__Default`, `StorageConnectionString`, `BLOB_CONTAINER`, `SSO_ENABLED`, `AUTH_SECRET`, `VAULT_DEK` |
 | Managed Identity | App Service → KV + blob + SQL Entra |
 
 HTTPS only. No FTP. SQL Bicep is Entra-only (`azureADOnlyAuthentication: true`) — no `administratorLogin` / `administratorLoginPassword`.

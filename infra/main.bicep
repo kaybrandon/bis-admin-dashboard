@@ -128,6 +128,72 @@ resource apiIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-3
 }
 
 var sqlConn = 'Server=tcp:${sql.properties.fullyQualifiedDomainName},1433;Database=${db.name};Authentication=Active Directory Managed Identity;User Id=${apiIdentity.properties.clientId};Encrypt=True;TrustServerCertificate=False;'
+var storageConn = 'DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${storage.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+
+// CoS locked Key Vault secret names (dash-safe). App reads the mapped env names.
+// KV secret                  → App Service env
+// SqlConnectionString        → ConnectionStrings__Default
+// StorageConnectionString    → StorageConnectionString
+// BLOB-CONTAINER             → BLOB_CONTAINER
+// SSO-ENABLED                → SSO_ENABLED
+// AUTH-SECRET                → AUTH_SECRET
+// VAULT-DEK                  → VAULT_DEK
+resource kvSql 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'SqlConnectionString'
+  properties: { value: sqlConn }
+}
+
+resource kvStorage 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'StorageConnectionString'
+  properties: { value: storageConn }
+}
+
+resource kvBlobContainer 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'BLOB-CONTAINER'
+  properties: { value: 'files' }
+}
+
+resource kvSso 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kv
+  name: 'SSO-ENABLED'
+  properties: { value: 'false' }
+}
+
+var kvSecretsUserRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+
+resource apiKvSecrets 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(kv.id, apiIdentity.id, kvSecretsUserRole)
+  scope: kv
+  properties: {
+    roleDefinitionId: kvSecretsUserRole
+    principalId: apiIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+var kvSecretsOfficerRole = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')
+
+resource deployerKvSecrets 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(kv.id, principalId, kvSecretsOfficerRole)
+  scope: kv
+  properties: {
+    roleDefinitionId: kvSecretsOfficerRole
+    principalId: principalId
+    principalType: principalType == 'Application' ? 'ServicePrincipal' : principalType
+  }
+}
+
+var kvRef = {
+  sql: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/SqlConnectionString)'
+  storage: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/StorageConnectionString)'
+  blob: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/BLOB-CONTAINER)'
+  sso: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/SSO-ENABLED)'
+  auth: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/AUTH-SECRET)'
+  vault: '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/VAULT-DEK)'
+}
 
 resource api 'Microsoft.Web/sites@2023-01-01' = {
   name: apiName
@@ -142,6 +208,7 @@ resource api 'Microsoft.Web/sites@2023-01-01' = {
   properties: {
     serverFarmId: plan.id
     httpsOnly: true
+    keyVaultReferenceIdentity: apiIdentity.id
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|8.0'
       ftpsState: 'Disabled'
@@ -149,15 +216,24 @@ resource api 'Microsoft.Web/sites@2023-01-01' = {
       appSettings: [
         { name: 'APPINSIGHTS_INSTRUMENTATIONKEY', value: insights.properties.InstrumentationKey }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: insights.properties.ConnectionString }
-        { name: 'BLOB_CONTAINER', value: 'files' }
-        { name: 'SSO_ENABLED', value: 'false' }
         { name: 'APP_BASE_URL', value: spaBaseUrl }
         { name: 'AZURE_CLIENT_ID', value: apiIdentity.properties.clientId }
-        { name: 'ConnectionStrings__Default', value: sqlConn }
-        { name: 'Blob__ConnectionString', value: 'DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${storage.listKeys().keys[0].value};EndpointSuffix=core.windows.net' }
+        { name: 'ConnectionStrings__Default', value: kvRef.sql }
+        { name: 'StorageConnectionString', value: kvRef.storage }
+        { name: 'BLOB_CONTAINER', value: kvRef.blob }
+        { name: 'SSO_ENABLED', value: kvRef.sso }
+        { name: 'AUTH_SECRET', value: kvRef.auth }
+        { name: 'VAULT_DEK', value: kvRef.vault }
       ]
     }
   }
+  dependsOn: [
+    kvSql
+    kvStorage
+    kvBlobContainer
+    kvSso
+    apiKvSecrets
+  ]
 }
 
 resource spa 'Microsoft.Web/sites@2023-01-01' = {
@@ -187,4 +263,4 @@ output keyVaultName string = kv.name
 output sqlServerName string = sql.name
 output storageAccountName string = storage.name
 output filesContainer string = 'files'
-output nextSteps string = 'Store AUTH_SECRET and VAULT_DEK (32-byte) in Key Vault, then wire App Service Key Vault references. SSO_ENABLED stays false.'
+output nextSteps string = 'Set Key Vault secrets AUTH-SECRET and VAULT-DEK (32-byte). App env: AUTH_SECRET, VAULT_DEK, BLOB_CONTAINER, SSO_ENABLED, StorageConnectionString, ConnectionStrings__Default. SSO-ENABLED stays false.'
