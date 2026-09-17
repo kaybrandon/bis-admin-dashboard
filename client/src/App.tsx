@@ -4,18 +4,23 @@ import { api, login, logout, me, refresh, setToken, token, type User } from "./a
 import { Home } from "./screens/HomeBoard";
 import { ClientFile, Clients, PrintSheet } from "./screens/Clients";
 import { Flags } from "./screens/Flags";
+import { clearCopiedPasswordNow } from "./clipboardVault";
+import { DEFAULT_WORKSPACE, loadWorkspace, resetWorkspace, type WorkspaceSettings } from "./workspace";
 
-const IDLE_MS = 15 * 60 * 1000;
 type ToastFn = (m: string) => void;
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspaceSettings>(DEFAULT_WORKSPACE);
   const show = (m: string) => { setToast(m); window.setTimeout(() => setToast(null), 2200); };
 
   useEffect(() => {
-    document.title = "Admin — BIS Consultants";
+    document.title = "Admin — " + workspace.companyName;
+  }, [workspace.companyName]);
+
+  useEffect(() => {
     if (!token()) { setReady(true); return; }
     me().then(setUser).catch(() => setToken(null)).finally(() => setReady(true));
   }, []);
@@ -23,17 +28,21 @@ export function App() {
   useEffect(() => {
     document.body.setAttribute("data-role", user?.role || "");
     document.getElementById("root")?.classList.toggle("app-shell", !!user);
+    if (!user) { resetWorkspace(); setWorkspace(DEFAULT_WORKSPACE); return; }
+    loadWorkspace().then(setWorkspace).catch(() => {});
   }, [user]);
 
   useEffect(() => {
     if (!user) return;
+    const idleMs = Math.max(1, workspace.idleMinutes) * 60 * 1000;
     let last = Date.now();
     const bump = () => { last = Date.now(); };
     ["mousemove", "keydown", "click", "touchstart"].forEach(e => window.addEventListener(e, bump, { passive: true }));
     const idle = window.setInterval(async () => {
-      if (Date.now() - last >= IDLE_MS) {
+      if (Date.now() - last >= idleMs) {
+        await clearCopiedPasswordNow().catch(() => {});
         await logout().catch(() => {});
-        setToken(null); setUser(null); show("Signed out · idle 15 minutes");
+        setToken(null); setUser(null); show("Signed out · idle " + workspace.idleMinutes + " minutes");
         window.location.href = "/login";
       }
     }, 5000);
@@ -42,14 +51,14 @@ export function App() {
       window.clearInterval(idle); window.clearInterval(slide);
       ["mousemove", "keydown", "click", "touchstart"].forEach(e => window.removeEventListener(e, bump));
     };
-  }, [user]);
+  }, [user, workspace.idleMinutes]);
 
   if (!ready) return <div className="content">Loading Admin…</div>;
   return (
     <>
       <Routes>
         <Route path="/login" element={<Login onIn={u => { setUser(u); }} toast={show} />} />
-        <Route path="/*" element={user ? <Shell user={user} setUser={setUser} toast={show} /> : <Navigate to="/login" replace />} />
+        <Route path="/*" element={user ? <Shell user={user} setUser={setUser} toast={show} workspace={workspace} setWorkspace={setWorkspace} /> : <Navigate to="/login" replace />} />
       </Routes>
       {toast && <div className="toast">{toast}</div>}
     </>
@@ -87,7 +96,10 @@ function Login({ onIn, toast }: { onIn: (u: User) => void; toast: ToastFn }) {
   );
 }
 
-function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null) => void; toast: ToastFn }) {
+function Shell({ user, setUser, toast, workspace, setWorkspace }: {
+  user: User; setUser: (u: User | null) => void; toast: ToastFn;
+  workspace: WorkspaceSettings; setWorkspace: (s: WorkspaceSettings) => void;
+}) {
   const loc = useLocation();
   const nav = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
@@ -139,6 +151,7 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
   };
 
   const signOut = async () => {
+    await clearCopiedPasswordNow().catch(() => {});
     await logout().catch(() => {});
     setToken(null); setUser(null); toast("Signed out · clocked out"); nav("/login");
   };
@@ -150,7 +163,7 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
   return (
     <>
       <aside className="sidebar">
-        <div className="brand">Admin<small>BIS Consultants</small></div>
+        <div className="brand">Admin<small>{workspace.companyName}</small></div>
         <div className="nav-label">Workspace</div>
         <NavBtn on={() => go("/")} active={loc.pathname === "/"} label="Home" />
         <NavBtn on={() => go("/clients")} active={active("/clients")} label="Clients" />
@@ -242,7 +255,7 @@ function Shell({ user, setUser, toast }: { user: User; setUser: (u: User | null)
             <Route path="/kudos" element={<KudosPage toast={toast} />} />
             <Route path="/mentions" element={<Mentions />} />
             <Route path="/admin" element={admin ? <AdminPage toast={toast} /> : <Navigate to="/" />} />
-            <Route path="/settings" element={<Settings admin={admin} />} />
+            <Route path="/settings" element={<Settings admin={admin} workspace={workspace} setWorkspace={setWorkspace} toast={toast} />} />
           </Routes>
         </div>
       </div>
@@ -748,20 +761,72 @@ function CatalogAdd({ onAdded, toast }: { onAdded: () => Promise<void>; toast: T
   );
 }
 
-function Settings({ admin }: { admin: boolean }) {
+function Settings({ admin, workspace, setWorkspace, toast }: {
+  admin: boolean; workspace: WorkspaceSettings; setWorkspace: (s: WorkspaceSettings) => void; toast: ToastFn;
+}) {
+  const [companyName, setCompanyName] = useState(workspace.companyName);
+  const [idleMinutes, setIdleMinutes] = useState(String(workspace.idleMinutes));
+  const [clearSec, setClearSec] = useState(String(workspace.clipboardClearSeconds));
+  useEffect(() => {
+    setCompanyName(workspace.companyName);
+    setIdleMinutes(String(workspace.idleMinutes));
+    setClearSec(String(workspace.clipboardClearSeconds));
+  }, [workspace]);
+
+  const save = async () => {
+    const idle = Number(idleMinutes);
+    const seconds = Number(clearSec);
+    if (!companyName.trim()) { toast("Company name is required"); return; }
+    if (!Number.isInteger(idle) || idle < 1 || idle > 240) { toast("Idle after must be 1–240 minutes"); return; }
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 600) { toast("Clear copied password must be 5–600 seconds"); return; }
+    try {
+      await api("/api/admin/settings", { method: "PUT", body: JSON.stringify({
+        companyName: companyName.trim(), idleMinutes: idle, clipboardClearSeconds: seconds
+      }) });
+      setWorkspace(await loadWorkspace());
+      toast("Settings saved");
+    } catch (e) { toast((e as Error).message); }
+  };
+
+  const clearNow = async () => {
+    const ok = await clearCopiedPasswordNow();
+    toast(ok ? "Copied password cleared" : "No copied password to clear");
+  };
+
   return (
     <section>
-      <div className="h"><div><h1>Settings</h1><p>Workspace options for Admin at BIS Consultants.</p></div></div>
+      <div className="h">
+        <div><h1>Settings</h1><p>Workspace options for Admin at {workspace.companyName}.</p></div>
+        {admin && <button className="btn p" onClick={save}>Save</button>}
+      </div>
       <div className="modules">
         {admin && <div className="card mod"><div className="mod-h"><h2>Workspace</h2></div>
-          <div className="set-row"><div><strong>Company name</strong><div className="muted">BIS Consultants</div></div></div>
-          <div className="set-row"><div><strong>Idle after</strong><div className="muted">15 minutes with no mouse or key → log out</div></div></div>
+          <div className="set-row">
+            <div><strong>Company name</strong><div className="muted">Shown in the Admin workspace</div></div>
+            <input className="sel set-input" value={companyName} onChange={e => setCompanyName(e.target.value)} aria-label="Company name" />
+          </div>
+          <div className="set-row">
+            <div><strong>Idle after</strong><div className="muted">Minutes with no mouse or key → log out</div></div>
+            <input className="sel set-input" inputMode="numeric" value={idleMinutes} onChange={e => setIdleMinutes(e.target.value)} aria-label="Idle after minutes" />
+          </div>
         </div>}
         <div className="card mod"><div className="mod-h"><h2>Files</h2></div>
           <div className="set-row"><div><strong>Compress photos</strong><div className="muted">JPEG, longest edge 1600px · ~72</div></div><div className="toggle on"><i /></div></div>
         </div>
         <div className="card mod"><div className="mod-h"><h2>Vault</h2></div>
-          <div className="set-row"><div><strong>Clear copied password</strong><div className="muted">30 seconds</div></div></div>
+          <div className="set-row">
+            <div>
+              <strong>Clear copied password</strong>
+              <div className="muted">{admin ? "Seconds after vault Copy. Never leave a secret on the clipboard." : `Auto-clears ${workspace.clipboardClearSeconds} seconds after Copy.`}</div>
+            </div>
+            {admin
+              ? <input className="sel set-input" inputMode="numeric" value={clearSec} onChange={e => setClearSec(e.target.value)} aria-label="Clear copied password seconds" />
+              : <span className="muted">{workspace.clipboardClearSeconds}s</span>}
+          </div>
+          <div className="set-row">
+            <div><strong>Clear copied password now</strong><div className="muted">Wipe the last vault secret from the clipboard.</div></div>
+            <button className="btn s" type="button" onClick={clearNow}>Clear now</button>
+          </div>
         </div>
         {admin && <div className="card mod"><div className="mod-h"><h2>Geofence</h2></div>
           <div className="set-row"><div><strong>Never auto Home</strong><div className="muted">Home is a tap, not a fence.</div></div><div className="toggle on"><i /></div></div>

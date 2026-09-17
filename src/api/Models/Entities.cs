@@ -331,6 +331,7 @@ public class CompanySettings
     public string CompanyName { get; set; } = "BIS Consultants";
     public bool ShowPresence { get; set; } = true;
     public int IdleMinutes { get; set; } = 15;
+    public int ClipboardClearSeconds { get; set; } = 30;
     public bool CompressPhotos { get; set; } = true;
     public bool AllowDocuments { get; set; } = true;
     public int MaxUploadMb { get; set; } = 25;

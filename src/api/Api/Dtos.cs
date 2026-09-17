@@ -26,7 +26,8 @@ public record VaultWriteRequest(string Department, string Title, string? Usernam
 public record NamedRequest(string Name, string? Description, string? Color);
 public record TokenCreateRequest(string Name, string? Contact, bool Internal);
 public record RevertRequest(string? Reason);
-public record SettingWriteRequest(string? CompanyName, bool? ShowPresence, int? IdleMinutes, bool? GeofenceOffice);
+public record SettingWriteRequest(string? CompanyName, bool? ShowPresence, int? IdleMinutes, bool? GeofenceOffice, int? ClipboardClearSeconds);
+public record WorkspaceSettingsDto(string CompanyName, int IdleMinutes, int ClipboardClearSeconds);
 
 public record HomeStatsDto(int Wins, int OnRoad, int InOffice, int OpenFlags);
 public record HomeCommentDto(Guid Id, string Body, string? Author, DateTime CreatedAt);
