@@ -391,7 +391,7 @@ function FeaturedPost({ post, kind, toast, onChange, onAdd, onEdit }: {
       {!post && <p className="muted">{win ? "No win posted this week yet." : "No update this week."}</p>}
       {post && (
         <>
-          {win ? <p className="hero">{post.title}</p> : <p><strong>{post.title}</strong>}</p>}
+          {win ? <p className="hero">{post.title}</p> : <p><strong>{post.title}</strong></p>}
           <p className="muted" style={{ margin: "6px 0 10px" }}>This week · {post.author || "Shop"} · {chiShort(post.createdAt)}</p>
           <p className="note">{mention(post.body)}</p>
           {post.comments.map(c => (
