@@ -19,3 +19,5 @@ jobs:
       - name: Build SPA
         working-directory: client
         run: npm ci && npm run build
+      - name: IIS web.config copied into SPA dist
+        run: test -f client/dist/web.config
