@@ -192,7 +192,8 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   const map = biz.map;
   const careOn = new Set(file.flags.filter(f => (f.color || f.level || "").toLowerCase().includes("care")).map(f => f.on));
   const pinned = file.people.filter(p => p.pinned).sort((a, b) => (a.primary === b.primary ? 0 : a.primary ? -1 : 1));
-  const depts = sortDepts(unique(file.people.map(p => p.department || "People")));
+  const unpinned = file.people.filter(p => !p.pinned);
+  const depts = sortDepts(unique(unpinned.map(p => p.department || "People")));
   const flagLevels = unique(file.flags.map(f => f.level).filter(Boolean) as string[]);
   const flagSummary = file.flags.length === 0
     ? ""
@@ -405,7 +406,7 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
               {depts.map(d => (
                 <div className="dept" key={d}>
                   <div className="dept-h">{d}</div>
-                  {file.people.filter(p => (p.department || "People") === d).map(p => (
+                  {unpinned.filter(p => (p.department || "People") === d).map(p => (
                     <PersonRow key={p.id} p={p} care={careOn.has(p.name)} onPin={togglePin} />
                   ))}
                 </div>
