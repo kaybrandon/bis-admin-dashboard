@@ -2,13 +2,13 @@
 
 Staff **Admin** app (client file + shop board). Product chrome is **Admin** — never Folio.
 
-Stack (locked): **ASP.NET Core 8 API + React/Vite SPA**. No Next.js. No GIS domain code.
+Stack (locked): **ASP.NET Core 10 API + React/Vite SPA**. No Next.js. No GIS domain code.
 
 UI: cream page (`#f3f0ea`), sidebar `#1c332c`, accent `#1c7a5c`.
 
 ## Local run (mergeable without Azure)
 
-Requires .NET 8 SDK and Node 20+.
+Requires .NET 10 SDK and Node 20+.
 
 ```bash
 chmod +x scripts/dev.sh
