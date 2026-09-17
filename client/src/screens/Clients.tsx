@@ -242,7 +242,7 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
   };
   const isDeptOpen = (name: string) => {
     if (Object.prototype.hasOwnProperty.call(openDepts, name)) return openDepts[name];
-    return id ? readDeptOpen(id, name, name === "Pinned") : name === "Pinned";
+    return id ? readDeptOpen(id, name, true) : true;
   };
   const persistDept = (name: string, open: boolean) => {
     setOpenDepts(s => ({ ...s, [name]: open }));
@@ -535,12 +535,12 @@ export function ClientFile({ toast }: { toast?: ToastFn }) {
               <p className="client-file-updated muted">
                 {file.updatedAt ? `Updated ${chiAgo(file.updatedAt)}` : "Client file"}
               </p>
+              <div className="client-file-actions">
+                <button className="btn" onClick={() => setFlagOn(v => !v)}>+ Flag</button>
+                <Link className="btn" to={`/clients/${file.id}/print`}>Print sheet</Link>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="client-file-actions">
-          <button className="btn" onClick={() => setFlagOn(v => !v)}>+ Flag</button>
-          <Link className="btn" to={`/clients/${file.id}/print`}>Print sheet</Link>
         </div>
         {file.flags.length > 0 && (
           <div className="client-file-flag-block">
