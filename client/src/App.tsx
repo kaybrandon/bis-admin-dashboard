@@ -4,6 +4,7 @@ import { api, login, logout, me, refresh, setToken, token, type User } from "./a
 import { Home } from "./screens/HomeBoard";
 import { ClientFile, Clients, PrintSheet } from "./screens/Clients";
 import { Flags } from "./screens/Flags";
+import { Audit, KudosPage, Mentions, Reports, Time } from "./screens/ShopFilters";
 import { clearCopiedPasswordNow } from "./clipboardVault";
 import { DEFAULT_WORKSPACE, loadWorkspace, resetWorkspace, type WorkspaceSettings } from "./workspace";
 
@@ -361,16 +362,16 @@ function Member({ toast, admin }: { toast: ToastFn; admin: boolean }) {
                 const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(birthdayPayload(bMonth, bDay, bYear)) });
                 setU(saved); toast("Birthday saved");
               }}>Save birthday</button>
-              <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
+              <DateFields label="Work Anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
               <button className="btn s" onClick={async () => {
                 const saved = await api<any>("/api/admin/users/" + id, { method: "PUT", body: JSON.stringify(anniversaryPayload(aMonth, aDay, aYear)) });
-                setU(saved); toast("Work anniversary saved");
-              }}>Save work anniversary</button>
+                setU(saved); toast("Work Anniversary saved");
+              }}>Save Work Anniversary</button>
             </div>
           ) : (
             <>
               {u.birthday ? <div className="row"><span className="muted">Birthday</span><strong>{formatDate(u.birthday)}</strong></div> : null}
-              {u.workAnniversary ? <div className="row"><span className="muted">Work anniversary</span><strong>{formatDate(u.workAnniversary)}</strong></div> : null}
+              {u.workAnniversary ? <div className="row"><span className="muted">Work Anniversary</span><strong>{formatDate(u.workAnniversary)}</strong></div> : null}
             </>
           )}
         </div>
@@ -423,7 +424,7 @@ function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; 
           <label className="muted">Work phone</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={work} onChange={e => setWork(e.target.value)} />
           <label className="muted">Extension</label><input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={ext} onChange={e => setExt(e.target.value)} />
           <DateFields label="Birthday" month={bMonth} day={bDay} year={bYear} setMonth={setBMonth} setDay={setBDay} setYear={setBYear} />
-          <DateFields label="Work anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
+          <DateFields label="Work Anniversary" hint="Hire / start date. Month and day are enough. Year is optional." month={aMonth} day={aDay} year={aYear} setMonth={setAMonth} setDay={setADay} setYear={setAYear} />
         </div>
         <div className="card mod span2">
           <div className="mod-h"><h2>Work</h2></div>
@@ -433,96 +434,6 @@ function Me({ user, setUser, toast }: { user: User; setUser: (u: User) => void; 
           <p className="muted" style={{ marginTop: 8 }}>Department, role, and manager are set on the Users list.</p>
         </div>
       </div>
-    </section>
-  );
-}
-
-function Time({ user, setUser, toast }: { user: User; setUser: (u: User) => void; toast: ToastFn }) {
-  const [data, setData] = useState<any>(null);
-  const load = () => api("/api/time").then(setData);
-  useEffect(() => { load(); }, []);
-  if (!data) return <p>Loading punches…</p>;
-  return (
-    <section>
-      <div className="h"><div><h1>My Time</h1><p>Your punches. Clock in from the header — it lands here.</p></div></div>
-      <div className="stats">
-        <div className="stat"><span>Today</span><b>{data.todayHours}h</b></div>
-        <div className="stat"><span>This week</span><b>{data.weekHours}h</b></div>
-        <div className="stat"><span>Status</span><b style={{ fontSize: 18 }}>{data.open ? "In" : "Out"}</b></div>
-        <div className="stat"><span>Workplace</span><b style={{ fontSize: 18 }}>{data.open?.workplace || "—"}</b></div>
-      </div>
-      <div className="card"><div className="table-wrap"><table>
-        <thead><tr><th>When</th><th>In / Out</th><th>Where</th><th>Note</th><th></th></tr></thead>
-        <tbody>
-          {data.punches.map((p: any) => (
-            <tr key={p.id}>
-              <td>{new Date(p.at).toLocaleString()}</td><td>{p.dir === "in" ? "In" : "Out"}</td>
-              <td>{p.workplace}{p.destination ? " · " + p.destination : ""}</td>
-              <td className="muted">{p.note || "—"}</td>
-              <td><button className="btn s" onClick={async () => {
-                const next = prompt("New time (local)", new Date(p.at).toISOString());
-                if (!next) return;
-                await api("/api/time/" + p.id, { method: "PUT", body: JSON.stringify({ at: next, reason: "edit" }) });
-                toast("Changed · manager notified · audit written"); load();
-              }}>Edit</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table></div></div>
-    </section>
-  );
-}
-
-function Reports({ toast }: { toast: ToastFn }) {
-  const [data, setData] = useState<any>(null);
-  useEffect(() => { api("/api/reports").then(setData); }, []);
-  if (!data) return <p>Loading reports…</p>;
-  return (
-    <section>
-      <div className="h"><div><h1>Reports</h1><p>Admin · time for the whole shop</p></div>
-        <button className="btn p" onClick={() => exportCsv("/api/admin/export/clients", toast)}>Export</button></div>
-      <div className="stats">
-        <div className="stat"><span>Hours this week</span><b>{Math.round(data.totals.hours)}</b></div>
-        <div className="stat"><span>Office</span><b>{Math.round(data.totals.office)}</b></div>
-        <div className="stat"><span>Road</span><b>{Math.round(data.totals.road)}</b></div>
-        <div className="stat"><span>Home</span><b>{Math.round(data.totals.home)}</b></div>
-      </div>
-      <div className="card" style={{ marginBottom: 14 }}><div className="table-wrap"><table>
-        <thead><tr><th>Name</th><th>Dept</th><th>Office</th><th>Road</th><th>Home</th><th>Total</th></tr></thead>
-        <tbody>{data.byPerson.map((r: any) => <tr key={r.userId}><td><strong>{r.name}</strong></td><td>{r.dept}</td><td>{fmtH(r.office)}</td><td>{fmtH(r.road)}</td><td>{fmtH(r.home)}</td><td>{fmtH(r.total)}</td></tr>)}</tbody>
-      </table></div></div>
-      <div className="card"><div className="mod-h" style={{ padding: "12px 12px 0" }}><h2>Punches · this week</h2></div>
-        <div className="table-wrap"><table>
-          <thead><tr><th>Who</th><th>When</th><th>In / Out</th><th>Where</th><th>Note</th></tr></thead>
-          <tbody>{data.punches.map((p: any, i: number) => <tr key={i}><td>{p.who}</td><td>{new Date(p.at).toLocaleString()}</td><td>{p.dir}</td><td>{p.workplace}</td><td className="muted">{p.destination || "—"}</td></tr>)}</tbody>
-        </table></div>
-      </div>
-    </section>
-  );
-}
-
-function Audit({ toast }: { toast: ToastFn }) {
-  const [rows, setRows] = useState<any[]>([]);
-  useEffect(() => { api<any[]>("/api/audit").then(setRows); }, []);
-  return (
-    <section>
-      <div className="h"><div><h1>Audit</h1><p>Every change. Revert writes a new line — the log itself cannot be edited.</p></div>
-        <button className="btn p" onClick={() => exportCsv("/api/admin/export/audit", toast)}>Export log</button></div>
-      <div className="card"><div className="table-wrap"><table>
-        <thead><tr><th>When</th><th>Who</th><th>Did</th><th>On</th><th></th></tr></thead>
-        <tbody>{rows.map(a => (
-          <tr key={a.id}>
-            <td className="muted">{new Date(a.createdAt).toLocaleString()}</td>
-            <td>{a.actor}</td><td>{a.action} · {a.objectType}</td><td>{a.clientId || a.objectType}</td>
-            <td>{a.canRevert ? <button className="btn s" onClick={async () => {
-              const reason = prompt("Reason for revert") || "revert";
-              await api(`/api/audit/${a.id}/revert`, { method: "POST", body: JSON.stringify({ reason }) });
-              toast("Reverted · new audit line written"); setRows(await api("/api/audit"));
-            }}>Revert</button> : <span className="muted">—</span>}</td>
-          </tr>
-        ))}</tbody>
-      </table></div></div>
-      <p className="muted" style={{ marginTop: 10 }}>Vault passwords and API token values are never stored in this log.</p>
     </section>
   );
 }
@@ -610,63 +521,6 @@ function DrawPad({ onSave }: { onSave: (b: Blob) => void }) {
       <canvas className="draw-canvas" ref={ref} width={146} height={78} />
       <button className="btn s" style={{ marginLeft: 8 }} onClick={() => ref.current?.toBlob(b => b && onSave(b), "image/png")}>Pin drawing</button>
     </div>
-  );
-}
-
-function KudosPage({ toast }: { toast: ToastFn }) {
-  const [data, setData] = useState<any>(null);
-  const [team, setTeam] = useState<any[]>([]);
-  const [to, setTo] = useState("");
-  const [why, setWhy] = useState("");
-  useEffect(() => { api("/api/kudos").then(setData); api<any[]>("/api/team").then(t => { setTeam(t); setTo(t[0]?.id); }); }, []);
-  if (!data) return <p>Loading kudos…</p>;
-  return (
-    <section>
-      <div className="h"><div><h1>Kudos</h1><p>One person. One thing they did. Counted by week, summed by month.</p></div></div>
-      <div className="card mod" style={{ marginBottom: 14 }}>
-        <div className="mod-h"><h2>Give kudos</h2></div>
-        <label className="muted">To</label>
-        <select className="sel" style={{ width: "100%", maxWidth: 320, margin: "6px 0 12px" }} value={to} onChange={e => setTo(e.target.value)}>
-          {team.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </select>
-        <label className="muted">One thing they did</label>
-        <input className="sel" style={{ width: "100%", margin: "6px 0 12px" }} value={why} onChange={e => setWhy(e.target.value)} placeholder="Owned the Northstar on-site" />
-        <button className="btn p" onClick={async () => {
-          if (!why.trim()) { toast("Name the thing they did"); return; }
-          await api("/api/kudos", { method: "POST", body: JSON.stringify({ toUserId: to, body: why }) });
-          toast("Star given"); setWhy(""); setData(await api("/api/kudos"));
-        }}>Give a star</button>
-      </div>
-      <div className="stats">{data.totals.map((t: any) => <div className="stat" key={t.id}><span>{t.name.split(" ")[0]} · week</span><b>{t.week} ★</b></div>)}</div>
-      <div className="modules">
-        <div className="card mod span2">
-          <div className="mod-h"><h2>This week</h2><span className="muted">Month is the sum of weeks</span></div>
-          {data.totals.map((t: any) => (
-            <div className="row" key={t.id}><div className="who"><div className="av" style={{ background: t.avatarColor }}>{t.initials}</div>
-              <div><strong>{t.name}</strong><div className="muted">{t.week} this week · {t.month} this month</div></div></div><span>{t.month} ★</span></div>
-          ))}
-        </div>
-        <div className="card mod span2">
-          <div className="mod-h"><h2>Latest</h2></div>
-          {data.latest.map((k: any) => <div className="row" key={k.id}><div><strong>{k.from} → {k.to}</strong><div className="muted">{k.body}</div></div><span>★</span></div>)}
-        </div>
-      </div>
-      <p className="muted" style={{ marginTop: 10 }}>One star per note. Name the person, name the thing.</p>
-    </section>
-  );
-}
-
-function Mentions() {
-  const [rows, setRows] = useState<any[]>([]);
-  useEffect(() => { api<any[]>("/api/mentions").then(setRows); }, []);
-  return (
-    <section>
-      <div className="h"><div><h1>@Mentions</h1><p>Everywhere someone tagged you — notes, #Post It, kudos, flags, the board.</p></div></div>
-      <div className="card"><div className="table-wrap"><table>
-        <thead><tr><th>When</th><th>Where</th><th>Said</th></tr></thead>
-        <tbody>{rows.map(m => <tr key={m.id}><td className="muted">{new Date(m.createdAt).toLocaleString()}</td><td>{m.sourceType}</td><td>{rich(m.snippet)}</td></tr>)}</tbody>
-      </table></div></div>
-    </section>
   );
 }
 
@@ -883,7 +737,6 @@ function rich(text: string) {
   const parts = text.split(/(@[A-Za-z][A-Za-z0-9._-]*)/g);
   return parts.map((p, i) => p.startsWith("@") ? <Link className="mention" key={i} to="/mentions">{p}</Link> : <span key={i}>{p}</span>);
 }
-function fmtH(n: number) { return n ? `${Math.round(n)}h` : "—"; }
 async function exportCsv(path: string, toast: ToastFn) {
   try {
     const t = token();

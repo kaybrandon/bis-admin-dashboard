@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Bis.Admin.Api.Data;
+using Bis.Admin.Api.Services;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
@@ -54,6 +55,7 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/admin/users")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/admin/export/clients")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/export/clients")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/reports/pdf")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/time")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/clients")).StatusCode);
     }
@@ -117,6 +119,12 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("/api/clients/{id}/vendors", json);
         Assert.Contains("/api/admin/services", json);
         Assert.Contains("/api/flags", json);
+        Assert.Contains("/api/time", json);
+        Assert.Contains("/api/reports", json);
+        Assert.Contains("/api/reports/pdf", json);
+        Assert.Contains("/api/audit", json);
+        Assert.Contains("/api/kudos", json);
+        Assert.Contains("/api/mentions", json);
         Assert.Contains("/api/settings", json);
         Assert.Contains("HomeBoardDto", json);
         Assert.Contains("ClientFileDto", json);
@@ -191,6 +199,39 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
 
         var comment = await client.PostAsJsonAsync($"/api/posts/{id}/comments", new { body = "Noted on the Win Board." });
         comment.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Home_can_add_a_win_edit_update_kudos_star_and_mention()
+    {
+        var client = _factory.CreateClient();
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var win = await client.PostAsJsonAsync("/api/posts", new { kind = "win", title = "Harbor signed", body = "Closed the Harbor kids packet." });
+        win.EnsureSuccessStatusCode();
+
+        var home = await client.GetFromJsonAsync<JsonElement>("/api/home");
+        var update = home.GetProperty("posts").EnumerateArray().First(p => p.GetProperty("kind").GetString() == "update");
+        var updateId = update.GetProperty("id").GetString();
+        var edit = await client.PutAsJsonAsync($"/api/posts/{updateId}", new { title = "Shop closed Friday noon · note", body = "Inventory and trucks. Ping @Brandon if you need the shop open." });
+        edit.EnsureSuccessStatusCode();
+        var afterEdit = await client.GetFromJsonAsync<JsonElement>("/api/home");
+        Assert.Contains(afterEdit.GetProperty("posts").EnumerateArray(), p =>
+            p.GetProperty("id").GetString() == updateId && p.GetProperty("title").GetString()!.Contains("note"));
+
+        var mayaId = Guid.Parse("22222222-2222-2222-2222-222222222202");
+        var kudos = await client.PostAsJsonAsync("/api/kudos", new { toUserId = mayaId, body = "Owned the Harbor walkthrough." });
+        kudos.EnsureSuccessStatusCode();
+        var mention = await client.PostAsJsonAsync("/api/mentions", new { userId = mayaId, snippet = "Need Maya on the Harbor cutover." });
+        mention.EnsureSuccessStatusCode();
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+        var inbox = await client.GetFromJsonAsync<JsonElement>("/api/mentions");
+        Assert.Contains(inbox.EnumerateArray(), m => m.GetProperty("snippet").GetString() == "Need Maya on the Harbor cutover.");
+        var blockedWin = await client.PostAsJsonAsync("/api/posts", new { kind = "win", title = "Nope", body = "Staff cannot post a win." });
+        Assert.Equal(HttpStatusCode.Forbidden, blockedWin.StatusCode);
     }
 
     [Fact]
@@ -469,6 +510,97 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
             clipboardClearSeconds = 30
         });
         restore.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Filters_pack_time_audit_mentions_kudos_reports_pdf()
+    {
+        var client = _factory.CreateClient();
+        var today = ChicagoClock.Today.ToString("yyyy-MM-dd");
+        var yesterday = ChicagoClock.Today.AddDays(-1).ToString("yyyy-MM-dd");
+        var lastMonth = ChicagoClock.Today.AddDays(-40).ToString("yyyy-MM-dd");
+
+        var maya = await Login(client, "maya@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", maya.GetProperty("token").GetString());
+
+        var timeAll = await client.GetFromJsonAsync<JsonElement>("/api/time");
+        Assert.True(timeAll.GetProperty("punches").GetArrayLength() >= 2);
+        var notes = await client.GetFromJsonAsync<JsonElement>("/api/time?q=Northstar");
+        Assert.Contains(notes.GetProperty("punches").EnumerateArray(), p => (p.GetProperty("note").GetString() ?? "").Contains("Northstar"));
+        Assert.DoesNotContain(notes.GetProperty("punches").EnumerateArray(), p => (p.GetProperty("note").GetString() ?? "").Contains("Murray Media visit"));
+        var todayOnly = await client.GetFromJsonAsync<JsonElement>($"/api/time?from={today}&to={today}");
+        Assert.All(todayOnly.GetProperty("punches").EnumerateArray(), p =>
+            Assert.StartsWith(today, ChicagoClock.ToChicago(p.GetProperty("at").GetDateTime()).ToString("yyyy-MM-dd")));
+        var miss = await client.GetFromJsonAsync<JsonElement>("/api/time?q=no-such-note");
+        Assert.Equal(0, miss.GetProperty("punches").GetArrayLength());
+
+        var mentionsMe = await client.GetFromJsonAsync<JsonElement>("/api/mentions");
+        Assert.All(mentionsMe.EnumerateArray(), m => Assert.Contains("Maya", m.GetProperty("name").GetString() ?? "", StringComparison.OrdinalIgnoreCase));
+        var mentionsRange = await client.GetFromJsonAsync<JsonElement>($"/api/mentions?from={today}&to={today}");
+        Assert.All(mentionsRange.EnumerateArray(), m =>
+            Assert.StartsWith(today, ChicagoClock.ToChicago(m.GetProperty("createdAt").GetDateTime()).ToString("yyyy-MM-dd")));
+        var mentionsBrandon = await client.GetFromJsonAsync<JsonElement>("/api/mentions?name=Brandon");
+        Assert.NotEmpty(mentionsBrandon.EnumerateArray());
+        Assert.All(mentionsBrandon.EnumerateArray(), m => Assert.Contains("Brandon", m.GetProperty("name").GetString(), StringComparison.OrdinalIgnoreCase));
+
+        var kudosMaya = await client.GetFromJsonAsync<JsonElement>("/api/kudos?name=Maya");
+        Assert.All(kudosMaya.GetProperty("latest").EnumerateArray(), k =>
+            Assert.True(
+                (k.GetProperty("to").GetString() ?? "").Contains("Maya", StringComparison.OrdinalIgnoreCase) ||
+                (k.GetProperty("from").GetString() ?? "").Contains("Maya", StringComparison.OrdinalIgnoreCase)));
+        var kudosOld = await client.GetFromJsonAsync<JsonElement>($"/api/kudos?from={lastMonth}&to={lastMonth}");
+        Assert.Equal(0, kudosOld.GetProperty("latest").GetArrayLength());
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/reports")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/reports/pdf")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/audit")).StatusCode);
+
+        var brandon = await Login(client, "brandon@bisconsultants.example");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", brandon.GetProperty("token").GetString());
+
+        var reports = await client.GetFromJsonAsync<JsonElement>("/api/reports");
+        Assert.False(string.IsNullOrWhiteSpace(reports.GetProperty("from").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(reports.GetProperty("to").GetString()));
+        var reportsNarrow = await client.GetFromJsonAsync<JsonElement>($"/api/reports?from={yesterday}&to={yesterday}");
+        Assert.Equal(yesterday, reportsNarrow.GetProperty("from").GetString());
+        Assert.Equal(yesterday, reportsNarrow.GetProperty("to").GetString());
+        Assert.DoesNotContain("not-a-real-nas-secret", reports.ToString());
+        Assert.DoesNotContain("not-a-real-nas-secret", reportsNarrow.ToString());
+
+        var pdf = await client.GetAsync($"/api/reports/pdf?from={yesterday}&to={today}");
+        Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+        Assert.Equal("application/pdf", pdf.Content.Headers.ContentType?.MediaType);
+        var pdfBytes = await pdf.Content.ReadAsByteArrayAsync();
+        Assert.True(pdfBytes.Length > 20);
+        Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(pdfBytes, 0, 4));
+        var pdfText = System.Text.Encoding.ASCII.GetString(pdfBytes);
+        Assert.Contains("Reports", pdfText);
+        Assert.DoesNotContain("not-a-real-nas-secret", pdfText);
+        Assert.DoesNotContain("SecretCipher", pdfText);
+
+        var audit = await client.GetFromJsonAsync<JsonElement>("/api/audit");
+        Assert.True(audit.GetArrayLength() > 0);
+        Assert.DoesNotContain("not-a-real-nas-secret", audit.ToString());
+        var auditSearch = await client.GetFromJsonAsync<JsonElement>("/api/audit?q=login");
+        Assert.All(auditSearch.EnumerateArray(), a =>
+            Assert.True(
+                (a.GetProperty("action").GetString() ?? "").Contains("login", StringComparison.OrdinalIgnoreCase) ||
+                (a.GetProperty("objectType").GetString() ?? "").Contains("login", StringComparison.OrdinalIgnoreCase) ||
+                (a.TryGetProperty("reason", out var reason) && (reason.GetString() ?? "").Contains("login", StringComparison.OrdinalIgnoreCase))));
+        var auditWho = await client.GetFromJsonAsync<JsonElement>("/api/audit?actor=Maya");
+        Assert.All(auditWho.EnumerateArray(), a => Assert.Contains("Maya", a.GetProperty("actor").GetString() ?? "", StringComparison.OrdinalIgnoreCase));
+        var auditDid = await client.GetFromJsonAsync<JsonElement>("/api/audit?action=login");
+        Assert.All(auditDid.EnumerateArray(), a => Assert.Equal("login", a.GetProperty("action").GetString()));
+        var auditOn = await client.GetFromJsonAsync<JsonElement>("/api/audit?objectType=user");
+        Assert.All(auditOn.EnumerateArray(), a => Assert.Equal("user", a.GetProperty("objectType").GetString()));
+        var auditRange = await client.GetFromJsonAsync<JsonElement>($"/api/audit?from={today}&to={today}");
+        Assert.All(auditRange.EnumerateArray(), a =>
+            Assert.StartsWith(today, ChicagoClock.ToChicago(a.GetProperty("createdAt").GetDateTime()).ToString("yyyy-MM-dd")));
+
+        var firstId = audit[0].GetProperty("id").GetString();
+        var del = await client.DeleteAsync("/api/audit/" + firstId);
+        Assert.True(del.StatusCode is HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotFound or HttpStatusCode.BadRequest);
+        Assert.NotEqual(HttpStatusCode.OK, del.StatusCode);
     }
 
     private static async Task<JsonElement> Login(HttpClient client, string email)

@@ -401,12 +401,12 @@ public static class SeedData
         }
         db.Punches.AddRange(
             new Punch { Id = Guid.NewGuid(), UserId = brandon.Id, Dir = "in", Workplace = "office", At = Chi(0, 8, 2) },
-            new Punch { Id = Guid.NewGuid(), UserId = maya.Id, Dir = "in", Workplace = "road", Destination = "Murray Media", At = Chi(0, 8, 14) },
+            new Punch { Id = Guid.NewGuid(), UserId = maya.Id, Dir = "in", Workplace = "road", Destination = "Murray Media", At = Chi(0, 8, 14), Note = "Murray Media visit" },
             new Punch { Id = Guid.NewGuid(), UserId = chris.Id, Dir = "in", Workplace = "home", At = Chi(0, 8, 30) },
             new Punch { Id = Guid.NewGuid(), UserId = brandon.Id, Dir = "in", Workplace = "office", At = Chi(1, 8, 2) },
             new Punch { Id = Guid.NewGuid(), UserId = brandon.Id, Dir = "out", Workplace = "office", At = Chi(1, 17, 11) },
-            new Punch { Id = Guid.NewGuid(), UserId = maya.Id, Dir = "in", Workplace = "road", Destination = "Northstar", At = Chi(1, 8, 10) },
-            new Punch { Id = Guid.NewGuid(), UserId = maya.Id, Dir = "out", Workplace = "road", Destination = "Northstar", At = Chi(1, 16, 51) },
+            new Punch { Id = Guid.NewGuid(), UserId = maya.Id, Dir = "in", Workplace = "road", Destination = "Northstar", At = Chi(1, 8, 10), Note = "Northstar visit" },
+            new Punch { Id = Guid.NewGuid(), UserId = maya.Id, Dir = "out", Workplace = "road", Destination = "Northstar", At = Chi(1, 16, 51), Note = "Northstar visit" },
             new Punch { Id = Guid.NewGuid(), UserId = sam.Id, Dir = "in", Workplace = "office", At = Chi(1, 8, 0) },
             new Punch { Id = Guid.NewGuid(), UserId = sam.Id, Dir = "out", Workplace = "office", At = Chi(1, 17, 8) }
         );

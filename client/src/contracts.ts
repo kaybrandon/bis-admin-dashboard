@@ -146,6 +146,10 @@ export const HomeClientsFlagsApi = {
   addVendor: "POST /api/clients/{id}/vendors  { kind, name, phone? }",
   editVendor: "PUT /api/clients/{id}/vendors/{vendorId}",
   removeVendor: "DELETE /api/clients/{id}/vendors/{vendorId}",
+  addWinOrUpdate: "POST /api/posts  { kind: win|update, title, body }  Admin only",
+  editPost: "PUT /api/posts/{id}  { title?, body? }  Admin only",
+  addKudos: "POST /api/kudos  { toUserId, body }",
+  addMention: "POST /api/mentions  { userId, snippet }",
   addNote: "POST /api/clients/{id}/notes  { body }  (@Name creates a mention)",
   addCatalogService: "POST /api/admin/services  { name, description? }  Admin only",
   vaultList: "GET /api/clients/{id}/vault  (masked)",
@@ -157,6 +161,12 @@ export const HomeClientsFlagsApi = {
   archiveFlag: "POST /api/flags/{id}/archive  → purgeAt = now+90d",
   restoreFlag: "POST /api/flags/{id}/restore",
   lookups: "GET /api/lookups  → counties, flagLevels, services, departments",
+  myTime: "GET /api/time?from=&to=&q=  (q = search notes)",
+  audit: "GET /api/audit?from=&to=&q=&action=&actor=&objectType=",
+  mentions: "GET /api/mentions?name=&from=&to=",
+  kudos: "GET /api/kudos?name=&from=&to=",
+  reports: "GET /api/reports?from=&to=",
+  reportsPdf: "GET /api/reports/pdf?from=&to=  (no vault)",
 } as const;
 
 export const MURRAY_MEDIA_ID = "66666666-6666-6666-6666-666666666601";

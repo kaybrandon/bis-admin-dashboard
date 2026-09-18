@@ -22,6 +22,10 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 - `birthdays[]` — yesterday/today/tomorrow; Maya is seeded in-window
 - `anniversaries[]` — same window on work anniversary (hire / start date); Chris is seeded in-window
 - `celebrations[]` — `{ id, name, initials, kind }` where `kind` is `birthday` or `anniversary`
+- Create win / update: `POST /api/posts` `{ kind, title, body }` (Admin)
+- Edit update: `PUT /api/posts/{id}` `{ title?, body? }` (Admin)
+- Add kudos / set star of the day: `POST /api/kudos` `{ toUserId, body }`
+- Add a mention: `POST /api/mentions` `{ userId, snippet }`
 
 ## Clients
 
@@ -59,6 +63,18 @@ Murray Media id: `66666666-6666-6666-6666-666666666601`
 | Restore | `POST /api/flags/{id}/restore` (only while hold remains) |
 
 Archived flags hide on the client file. After 90 days they are purged and cannot be restored.
+
+## Filters (P8)
+
+| Surface | Query |
+|---|---|
+| My Time | `GET /api/time?from=&to=&q=` — `from`/`to` = `yyyy-MM-dd` Chicago; `q` searches punch **notes** |
+| Audit | `GET /api/audit?from=&to=&q=&action=&actor=&objectType=&actorId=&clientId=` — time range, search bar, column filters. Revert only; no delete |
+| @Mentions | `GET /api/mentions?name=&from=&to=` — empty `name` = tagged me; `name` matches mentioned person |
+| Kudos | `GET /api/kudos?name=&from=&to=` — name on from/to; latest respects range |
+| Reports | `GET /api/reports?from=&to=` (default this week) · `GET /api/reports/pdf?from=&to=` — **PDF**, no vault |
+
+Staff: 403 on reports / audit / PDF. Vault secrets never in PDF, print, export, or audit.
 
 ## RBAC (server)
 
