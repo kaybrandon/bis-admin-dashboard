@@ -1,6 +1,6 @@
 # Admin SPA (`client/`)
 
-React + Vite shell. Product chrome is **Admin** (never Folio). Cream page, sidebar `#1c332c`, accent `#1c7a5c`.
+React + Vite shell. Product chrome is **Admin** (never Folio). Pale gray page `#F3F5FA`, white sidebar, indigo selected pill, coral Log out, Inter. Home and the Murray Media file render sample data.
 
 ## Dev2 lane
 
