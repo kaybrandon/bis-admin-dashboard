@@ -106,8 +106,13 @@ using (var scope = app.Services.CreateScope())
         await db.Database.EnsureCreatedAsync();
     await EnsurePostThumbsTableAsync(db);
     await EnsureWorkAnniversaryColumnAsync(db);
-    var files = scope.ServiceProvider.GetRequiredService<FileStore>();
-    await SeedData.EnsureAsync(db, app.Configuration, log, files);
+    if (app.Environment.IsProduction())
+        log.LogInformation("Seed skipped — Production host.");
+    else
+    {
+        var files = scope.ServiceProvider.GetRequiredService<FileStore>();
+        await SeedData.EnsureAsync(db, app.Configuration, log, files);
+    }
 }
 
 if (args.Contains("--seed-only"))

@@ -3,7 +3,11 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Bis.Admin.Api.Data;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Bis.Admin.Api.Tests;
@@ -469,6 +473,73 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
             clipboardClearSeconds = 30
         });
         restore.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Production_empty_boot_does_not_insert_seed_user()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), "admin-prod-empty-" + Guid.NewGuid().ToString("N") + ".db");
+        try
+        {
+            await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+            {
+                b.UseEnvironment(Environments.Production);
+                b.UseSetting("ConnectionStrings:Default", "Data Source=" + dbPath);
+                b.UseSetting("AUTH_SECRET", "test-auth-secret-key-32-bytes-min!!");
+            });
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.False(await db.Users.AnyAsync(u => u.Email == "brandon@bisconsultants.example"));
+            Assert.Equal(0, await db.Users.CountAsync());
+
+            var client = factory.CreateClient();
+            var login = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+            {
+                Content = JsonContent.Create(new { email = "brandon@bisconsultants.example", password = SeedData.SeedPassword })
+            };
+            login.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
+            var res = await client.SendAsync(login);
+            Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
+        }
+        finally
+        {
+            DeleteSqlite(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task Development_empty_boot_seeds_user()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), "admin-dev-empty-" + Guid.NewGuid().ToString("N") + ".db");
+        try
+        {
+            await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+            {
+                b.UseEnvironment(Environments.Development);
+                b.UseSetting("ConnectionStrings:Default", "Data Source=" + dbPath);
+                b.UseSetting("AUTH_SECRET", "test-auth-secret-key-32-bytes-min!!");
+            });
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.True(await db.Users.AnyAsync(u => u.Email == "brandon@bisconsultants.example"));
+
+            var client = factory.CreateClient();
+            var res = await client.PostAsJsonAsync("/api/auth/login", new { email = "brandon@bisconsultants.example", password = SeedData.SeedPassword });
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        }
+        finally
+        {
+            DeleteSqlite(dbPath);
+        }
+    }
+
+    private static void DeleteSqlite(string path)
+    {
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+        {
+            try { if (File.Exists(path + suffix)) File.Delete(path + suffix); }
+            catch (IOException) { }
+        }
     }
 
     private static async Task<JsonElement> Login(HttpClient client, string email)
