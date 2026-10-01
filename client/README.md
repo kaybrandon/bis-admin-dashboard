@@ -1,6 +1,6 @@
 # Admin SPA (`client/`)
 
-React + Vite shell. Product chrome is **Admin** (never Folio). Cream page, sidebar `#1c332c`, accent `#1c7a5c`.
+React + Vite shell. Product chrome is **Admin** (never Folio). Pale gray page `#F3F5FA`, white sidebar, indigo selected pill, coral Log out, Inter. Home and the Murray Media file render sample data.
 
 ## Dev2 lane
 
@@ -21,4 +21,4 @@ Do **not** change API routes or vault/RBAC/audit behavior. Login + layout chrome
 - Week board: Mon–Sun `America/Chicago`. Kudos: 1 deed = 1 star.
 
 ### Seed
-Murray Media id `66666666-6666-6666-6666-666666666601`. Brandon admin / Maya staff. Password `Admin!2026`.
+Murray Media id `66666666-6666-6666-6666-666666666601`. Brandon admin / Maya staff.

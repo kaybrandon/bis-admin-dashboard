@@ -40,8 +40,8 @@ SSO is built and **off** (`SSO_ENABLED=false`). `GET /api/auth/sso/start` → 40
 | Notes | `POST /api/clients/{id}/notes` `{ body }` (`@Name` → mention) |
 | Catalog add | `POST /api/admin/services` `{ name, description? }` — **Admin only**; staff 403 |
 | Vault list | `GET /api/clients/{id}/vault` — `secret` is always `••••••••` |
-| Vault add | `POST /api/clients/{id}/vault` `{ department, title, username?, secret, url?, note? }` |
-| Reveal | `POST /api/clients/{id}/vault/{credId}/reveal` → `{ secret }` human staff only |
+| Vault add | `POST /api/clients/{id}/vault` `{ department, title, username?, url?, note? }` — no secret is stored |
+| Reveal | not in this slice — the list stays masked |
 | Files | `POST /api/clients/{id}/files` multipart `file` (images compress) · download `GET /files/{id}` or `GET /api/files/{id}` (JWT) |
 | Lookups | `GET /api/lookups` counties, flagLevels, services, departments |
 

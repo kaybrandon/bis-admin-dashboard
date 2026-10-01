@@ -4,7 +4,7 @@ Staff **Admin** app (client file + shop board). Product chrome is **Admin** — 
 
 Stack (locked): **ASP.NET Core 10 API + React/Vite SPA**. No Next.js. No GIS domain code.
 
-UI: cream page (`#f3f0ea`), sidebar `#1c332c` (184px), accent `#1c7a5c`, header 56px. Home is a 3-col week board at ≥1100px (Update/Star/Kudos · Mentions/Win Board) with cream cards + thin left accents — not a client list.
+UI: pale gray page (`#F3F5FA`), white rounded shell, white sidebar, indigo selected pill, coral for alerts and Log out, Inter. Home is This week / Last week / Clients with sample tiles, clocked hours, and open flags. The SPA shell uses sample data; sign-in still uses the local API.
 
 ## Local run (mergeable without Azure)
 
@@ -58,8 +58,7 @@ Access tokens (`adm_ext_…`) are read-only: no vault secrets, no admin routes.
 
 ## Vault
 
-AES-256-GCM via `VAULT_DEK` (32-byte key, base64 or hex). Store iv + ciphertext.  
-Never plaintext in logs, list/API payloads, print, export, or audit body.
+This slice does not encrypt vault values and does not read `VAULT_DEK`. Lists return a mask only. No secret is stored or returned.
 
 ## Azure (when credentials exist)
 
@@ -77,7 +76,7 @@ HTTPS only. No FTP. SQL is **Entra-only** (no SQL username/password in Bicep).
 
 ### Key Vault → App Service env (locked)
 
-CoS secret names are dash-safe. The app still reads `AUTH_SECRET` / `VAULT_DEK` / `BLOB_CONTAINER` / `SSO_ENABLED` / `ConnectionStrings:Default` (plus `StorageConnectionString` for blob).
+CoS secret names are dash-safe. The app still reads `AUTH_SECRET` / `BLOB_CONTAINER` / `SSO_ENABLED` / `ConnectionStrings:Default` (plus `StorageConnectionString` for blob). This slice does not read `VAULT_DEK`.
 
 | Key Vault secret | App Service setting | App reads |
 |---|---|---|
@@ -86,7 +85,6 @@ CoS secret names are dash-safe. The app still reads `AUTH_SECRET` / `VAULT_DEK` 
 | `BLOB-CONTAINER` | `BLOB_CONTAINER` | `BLOB_CONTAINER` (`files`) |
 | `SSO-ENABLED` | `SSO_ENABLED` | `SSO_ENABLED` (`false`) |
 | `AUTH-SECRET` | `AUTH_SECRET` | `AUTH_SECRET` |
-| `VAULT-DEK` | `VAULT_DEK` | `VAULT_DEK` (32-byte) |
 
 `APP_BASE_URL` / CORS stay as a regular App Service setting (not a KV secret).
 
