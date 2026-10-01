@@ -22,7 +22,7 @@ public record AddressWriteRequest(string Label, string? Line1, string? City, str
 public record ClientServiceWriteRequest(Guid? ServiceTypeId, bool? On, string? Note);
 public record ClientLinkWriteRequest(string Label, string Url);
 public record ClientVendorWriteRequest(string Kind, string Name, string? Phone);
-public record VaultWriteRequest(string Department, string Title, string? Username, string Secret, string? Url, string? Note);
+public record VaultWriteRequest(string Department, string Title, string? Username, string? Url, string? Note);
 public record NamedRequest(string Name, string? Description, string? Color);
 public record TokenCreateRequest(string Name, string? Contact, bool Internal);
 public record RevertRequest(string? Reason);

@@ -18,7 +18,6 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         {
             b.UseSetting("ConnectionStrings:Default", "Data Source=data/test-admin.db");
             b.UseSetting("AUTH_SECRET", "test-auth-secret-key-32-bytes-min!!");
-            b.UseSetting("VAULT_DEK", "YmlzLWFkbWluLWxvY2FsLW9ubHktdmF1bHQtZGVrMzI=");
             b.UseSetting("SSO_ENABLED", "false");
             b.UseSetting("APP_BASE_URL", "http://localhost:5173");
         });
@@ -76,11 +75,12 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("••••••••", fileJson);
         var vault = file.GetProperty("vault");
         var first = vault.EnumerateArray().First();
+        Assert.Equal("••••••••", first.GetProperty("secret").GetString());
         var credId = first.GetProperty("id").GetString();
         var reveal = await client.PostAsync($"/api/clients/{murrayId}/vault/{credId}/reveal", null);
-        Assert.Equal(HttpStatusCode.OK, reveal.StatusCode);
+        Assert.False(reveal.IsSuccessStatusCode);
         var revealed = await reveal.Content.ReadAsStringAsync();
-        Assert.Contains("not-a-real", revealed);
+        Assert.DoesNotContain("not-a-real", revealed);
         var print = await client.GetFromJsonAsync<JsonElement>($"/api/clients/{murrayId}/print");
         var printJson = print.ToString();
         Assert.DoesNotContain("not-a-real", printJson);

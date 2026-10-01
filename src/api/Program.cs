@@ -30,7 +30,6 @@ builder.Services.AddDbContext<AppDbContext>(o =>
 });
 
 builder.Services.AddAdminAuth(builder.Configuration);
-builder.Services.AddSingleton<VaultCrypto>();
 builder.Services.AddScoped<AuditWriter>();
 builder.Services.AddScoped<MentionService>();
 builder.Services.AddScoped<FileStore>();
@@ -98,7 +97,6 @@ app.MapFallbackToFile("index.html");
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var vault = scope.ServiceProvider.GetRequiredService<VaultCrypto>();
     var log = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
     var pending = db.Database.GetPendingMigrations().ToList();
     var applied = db.Database.GetAppliedMigrations().ToList();
@@ -109,7 +107,7 @@ using (var scope = app.Services.CreateScope())
     await EnsurePostThumbsTableAsync(db);
     await EnsureWorkAnniversaryColumnAsync(db);
     var files = scope.ServiceProvider.GetRequiredService<FileStore>();
-    await SeedData.EnsureAsync(db, vault, app.Configuration, log, files);
+    await SeedData.EnsureAsync(db, app.Configuration, log, files);
 }
 
 if (args.Contains("--seed-only"))

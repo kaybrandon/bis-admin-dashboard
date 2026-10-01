@@ -21,4 +21,4 @@ Do **not** change API routes or vault/RBAC/audit behavior. Login + layout chrome
 - Week board: Mon–Sun `America/Chicago`. Kudos: 1 deed = 1 star.
 
 ### Seed
-Murray Media id `66666666-6666-6666-6666-666666666601`. Brandon admin / Maya staff. Password `Admin!2026`.
+Murray Media id `66666666-6666-6666-6666-666666666601`. Brandon admin / Maya staff.

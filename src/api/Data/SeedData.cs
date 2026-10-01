@@ -10,7 +10,7 @@ public static class SeedData
 {
     public const string SeedPassword = "Admin!2026";
 
-    public static async Task EnsureAsync(AppDbContext db, VaultCrypto vault, IConfiguration config, ILogger log, FileStore files)
+    public static async Task EnsureAsync(AppDbContext db, IConfiguration config, ILogger log, FileStore files)
     {
         await EnsureClipboardClearColumnAsync(db);
         if (await db.Users.AnyAsync())
@@ -246,24 +246,21 @@ public static class SeedData
             new Vendor { Id = Guid.NewGuid(), ClientId = murray.Id, Kind = "Adobe", Name = "Reseller · CDW" }
         );
 
-        void AddVault(Guid clientId, string dept, string title, string user, string secret)
+        void AddVault(Guid clientId, string dept, string title, string user)
         {
-            var (iv, cipher) = vault.Encrypt(secret);
             db.Credentials.Add(new Credential
             {
                 Id = Guid.NewGuid(),
                 ClientId = clientId,
                 Department = dept,
                 Title = title,
-                Username = user,
-                SecretIv = iv,
-                SecretCipher = cipher
+                Username = user
             });
         }
-        AddVault(murray.Id, "IT", "Studio NAS", "scott", "not-a-real-nas-secret");
-        AddVault(murray.Id, "IT", "Studio Wi-Fi", "MurrayStudio", "not-a-real-wifi-secret");
-        AddVault(murray.Id, "IT", "Camera system", "admin", "not-a-real-cam-secret");
-        AddVault(murray.Id, "Digital", "Adobe", "bre@murraymedia.example", "not-a-real-adobe-secret");
+        AddVault(murray.Id, "IT", "Studio NAS", "scott");
+        AddVault(murray.Id, "IT", "Studio Wi-Fi", "MurrayStudio");
+        AddVault(murray.Id, "IT", "Camera system", "admin");
+        AddVault(murray.Id, "Digital", "Adobe", "bre@murraymedia.example");
 
         db.Flags.AddRange(
             new Flag

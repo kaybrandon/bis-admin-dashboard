@@ -87,7 +87,7 @@ export function App() {
 function Login({ onIn, toast }: { onIn: (u: User) => void; toast: ToastFn }) {
   const nav = useNavigate();
   const [email, setEmail] = useState("brandon@bisconsultants.example");
-  const [password, setPassword] = useState("Admin!2026");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   return (
     <div className="login-screen">

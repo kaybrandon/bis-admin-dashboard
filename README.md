@@ -58,8 +58,7 @@ Access tokens (`adm_ext_…`) are read-only: no vault secrets, no admin routes.
 
 ## Vault
 
-AES-256-GCM via `VAULT_DEK` (32-byte key, base64 or hex). Store iv + ciphertext.  
-Never plaintext in logs, list/API payloads, print, export, or audit body.
+This slice does not encrypt vault values and does not read `VAULT_DEK`. Lists return a mask only. No secret is stored or returned.
 
 ## Azure (when credentials exist)
 
@@ -77,7 +76,7 @@ HTTPS only. No FTP. SQL is **Entra-only** (no SQL username/password in Bicep).
 
 ### Key Vault → App Service env (locked)
 
-CoS secret names are dash-safe. The app still reads `AUTH_SECRET` / `VAULT_DEK` / `BLOB_CONTAINER` / `SSO_ENABLED` / `ConnectionStrings:Default` (plus `StorageConnectionString` for blob).
+CoS secret names are dash-safe. The app still reads `AUTH_SECRET` / `BLOB_CONTAINER` / `SSO_ENABLED` / `ConnectionStrings:Default` (plus `StorageConnectionString` for blob). This slice does not read `VAULT_DEK`.
 
 | Key Vault secret | App Service setting | App reads |
 |---|---|---|
@@ -86,7 +85,6 @@ CoS secret names are dash-safe. The app still reads `AUTH_SECRET` / `VAULT_DEK` 
 | `BLOB-CONTAINER` | `BLOB_CONTAINER` | `BLOB_CONTAINER` (`files`) |
 | `SSO-ENABLED` | `SSO_ENABLED` | `SSO_ENABLED` (`false`) |
 | `AUTH-SECRET` | `AUTH_SECRET` | `AUTH_SECRET` |
-| `VAULT-DEK` | `VAULT_DEK` | `VAULT_DEK` (32-byte) |
 
 `APP_BASE_URL` / CORS stay as a regular App Service setting (not a KV secret).
 

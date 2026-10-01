@@ -150,8 +150,6 @@ public class Credential
     public string Department { get; set; } = "";
     public string Title { get; set; } = "";
     public string? Username { get; set; }
-    public byte[] SecretIv { get; set; } = Array.Empty<byte>();
-    public byte[] SecretCipher { get; set; } = Array.Empty<byte>();
     public string? Url { get; set; }
     public string? Note { get; set; }
 }

@@ -91,7 +91,7 @@ export type ClientFile = {
   services: { id: string; serviceTypeId?: string; name?: string; on: boolean; note?: string }[];
   links: { id: string; label: string; url: string }[];
   vendors: { id: string; kind: string; name: string; phone?: string }[];
-  /** secret is always "••••••••" until POST …/reveal */
+  /** secret is always the mask. This slice does not reveal a value. */
   vault: { id: string; department: string; title: string; username?: string; secret: string; url?: string; note?: string }[];
   flags: { id: string; body: string; createdAt: string; level?: string; color?: string; on: string; createdBy?: string }[];
   files: { id: string; name: string; kind: string; mime: string; bytes: number }[];
@@ -149,8 +149,7 @@ export const HomeClientsFlagsApi = {
   addNote: "POST /api/clients/{id}/notes  { body }  (@Name creates a mention)",
   addCatalogService: "POST /api/admin/services  { name, description? }  Admin only",
   vaultList: "GET /api/clients/{id}/vault  (masked)",
-  vaultAdd: "POST /api/clients/{id}/vault  { department, title, username?, secret, url?, note? }",
-  vaultReveal: "POST /api/clients/{id}/vault/{credId}/reveal  → { secret }  (human staff only)",
+  vaultAdd: "POST /api/clients/{id}/vault  { department, title, username?, url?, note? }",
   upload: "POST /api/clients/{id}/files  multipart field=file",
   flags: "GET /api/flags?state=open|archived&clientId=&levelId=",
   addFlag: "POST /api/flags  { clientId, levelId, body, personId? }",

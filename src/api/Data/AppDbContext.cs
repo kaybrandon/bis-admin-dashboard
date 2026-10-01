@@ -54,10 +54,6 @@ public class AppDbContext : DbContext
             e.HasMany(x => x.Attachments).WithOne(x => x.Client).HasForeignKey(x => x.ClientId);
             e.HasMany(x => x.Notes).WithOne(x => x.Client).HasForeignKey(x => x.ClientId);
         });
-        model.Entity<Credential>(e =>
-        {
-            e.Ignore("SecretPlain");
-        });
         model.Entity<Audit>(e =>
         {
             e.HasIndex(x => x.CreatedAt);

@@ -613,34 +613,21 @@ public static class Endpoints
             return Results.Ok(items.Select(Maps.VaultMasked));
         }).RequireAuthorization().WithTags("Clients").Produces<IEnumerable<VaultMaskedDto>>();
 
-        api.MapPost("/clients/{id:guid}/vault", async (HttpContext ctx, Guid id, VaultWriteRequest req, AppDbContext db, VaultCrypto vault, AuditWriter audit) =>
+        api.MapPost("/clients/{id:guid}/vault", async (HttpContext ctx, Guid id, VaultWriteRequest req, AppDbContext db, AuditWriter audit) =>
         {
             if (Authz.DenyTokenForVaultOrAdmin(ctx) is { } d) return d;
             var deny = Authz.RequireHumanStaff(ctx);
             if (deny is not null) return deny;
-            var (iv, cipher) = vault.Encrypt(req.Secret);
             var cred = new Credential
             {
                 Id = Guid.NewGuid(), ClientId = id, Department = req.Department, Title = req.Title,
-                Username = req.Username, SecretIv = iv, SecretCipher = cipher, Url = req.Url, Note = req.Note
+                Username = req.Username, Url = req.Url, Note = req.Note
             };
             db.Credentials.Add(cred);
             await db.SaveChangesAsync();
             await audit.WriteAsync(Authz.Actor(ctx).Id, "create", "credential", cred.Id, id, null, new { cred.Title, cred.Username, cred.Department }, null);
             return Results.Ok(Maps.VaultMasked(cred));
         }).RequireAuthorization().WithTags("Clients").Produces<VaultMaskedDto>();
-
-        api.MapPost("/clients/{id:guid}/vault/{credId:guid}/reveal", async (HttpContext ctx, Guid id, Guid credId, AppDbContext db, VaultCrypto vault, AuditWriter audit) =>
-        {
-            if (Authz.DenyTokenForVaultOrAdmin(ctx) is { } d) return d;
-            var deny = Authz.RequireHumanStaff(ctx);
-            if (deny is not null) return deny;
-            var cred = await db.Credentials.FirstOrDefaultAsync(c => c.Id == credId && c.ClientId == id);
-            if (cred is null) return Results.NotFound();
-            var secret = vault.Decrypt(cred.SecretIv, cred.SecretCipher);
-            await audit.WriteAsync(Authz.Actor(ctx).Id, "reveal", "credential", cred.Id, id, null, new { cred.Title, revealed = true }, null);
-            return Results.Ok(new { secret });
-        }).RequireAuthorization().WithTags("Clients");
     }
 
     private static void MapFlags(RouteGroupBuilder api)
